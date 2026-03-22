@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import api from '../utils/api';
 import { Mawb, CgmPreview, Transmission } from '../types';
 import toast from 'react-hot-toast';
+import { fmtDateTime } from '../utils/dateUtils';
 
 const TransmissionPage: React.FC = () => {
   const [params] = useSearchParams();
@@ -16,7 +17,7 @@ const TransmissionPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'generate' | 'history'>('generate');
 
   useEffect(() => {
-    api.get('/mawbs').then(r => setMawbs(r.data)).catch(() => {});
+    api.get('/mawbs', { params: { pageSize: 1000 } }).then(r => setMawbs(r.data.data ?? [])).catch(() => {});
     api.get('/transmissions/history').then(r => setHistory(r.data)).catch(() => {});
   }, []);
 
@@ -181,7 +182,7 @@ const TransmissionPage: React.FC = () => {
                       <td className="font-mono text-sm">{t.file_name}</td>
                       <td className="font-mono">{t.mawb_no || '—'}</td>
                       <td>{t.username || '—'}</td>
-                      <td className="text-muted text-sm">{new Date(t.sent_at).toLocaleString('en-IN')}</td>
+                      <td className="text-muted text-sm">{fmtDateTime(t.sent_at)}</td>
                       <td>
                         <span className={`badge ${t.status === 'sent' || t.status === 'transmitted' ? 'badge-success' : t.status === 'error' ? 'badge-danger' : 'badge-gray'}`}>
                           {t.status}

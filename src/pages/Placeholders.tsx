@@ -19,11 +19,6 @@ const ComingSoon: React.FC<Props> = ({ title, description }) => {
   );
 };
 
-export const ChecklistPage = () => <ComingSoon title="Checklist Report" />;
-export const AccountStatementPage = () => <ComingSoon title="Account Statement" />;
-export const CanDoPage = () => <ComingSoon title="CAN / DO" description="Cancel and Delivery Order management." />;
-export const AirManifestPage = () => <ComingSoon title="Air Manifest" description="IGM/EGM management for airline operations." />;
-export const AccountingPage = () => <ComingSoon title="Accounting" description="Invoice and accounting management module." />;
 export const NotFoundPage = () => <ComingSoon title="Page Not Found" description="The page you're looking for doesn't exist." />;
 
 export default ComingSoon;

@@ -2,98 +2,215 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import { Mawb, MawbForm, Profile, Location } from '../types';
+import { useAuth } from '../hooks/useAuth';
 import toast from 'react-hot-toast';
+import { fmtDateTime } from '../utils/dateUtils';
+import Pagination from '../components/Pagination';
+
+type ModalMode = 'add' | 'edit' | 'part' | 'amend' | 'delete-confirm' | null;
 
 const emptyForm: MawbForm = {
-  mawb_no: '', mawb_date: '', airline_code: '', origin: '', destination: '',
+  mawb_no: '', mawb_date: '', origin: '', destination: '',
+  total_packages: '', gross_weight: '', customs_house_code: '', profile_id: '',
   flight_no: '', flight_origin_date: '', igm_no: '', igm_date: '',
-  shipment_type: 'T', total_packages: '', gross_weight: '',
-  item_description: '', special_handling_code: '', uld_number: '',
-  customs_house_code: '', profile_id: '',
 };
 
-const SHIPMENT_TYPES = [{ v: 'T', l: 'T - Total' }, { v: 'P', l: 'P - Part Shipment' }, { v: 'S', l: 'S - Split' }];
-
 const MawbPage: React.FC = () => {
+  const { selectedLocation, user } = useAuth();
   const [mawbs, setMawbs] = useState<Mawb[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [showModal, setShowModal] = useState(false);
-  const [editId, setEditId] = useState<string | null>(null);
+  const [modalMode, setModalMode] = useState<ModalMode>(null);
+  const [activeMawb, setActiveMawb] = useState<Mawb | null>(null);
   const [form, setForm] = useState<MawbForm>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const navigate = useNavigate();
 
-  const fetchMawbs = useCallback(async () => {
+  const fetchMawbs = useCallback(async (p = page, ps = pageSize) => {
     setLoading(true);
     try {
-      const res = await api.get('/mawbs', { params: search ? { search } : {} });
-      setMawbs(res.data);
+      const res = await api.get('/mawbs', { params: { page: p, pageSize: ps, ...(search ? { search } : {}) } });
+      setMawbs(res.data.data);
+      setTotal(res.data.total);
     } catch { toast.error('Failed to load MAWBs'); }
     finally { setLoading(false); }
-  }, [search]);
+  }, [search, page, pageSize]);
 
-  useEffect(() => {
-    fetchMawbs();
-  }, [fetchMawbs]);
-
+  useEffect(() => { fetchMawbs(); }, [fetchMawbs]);
   useEffect(() => {
     api.get('/profiles').then(r => setProfiles(r.data)).catch(() => {});
     api.get('/locations').then(r => setLocations(r.data)).catch(() => {});
   }, []);
 
-  const openAdd = () => { setEditId(null); setForm(emptyForm); setShowModal(true); };
-  const openEdit = (m: Mawb) => {
-    setEditId(m.id);
+  // Keep destination in sync whenever selectedLocation changes (covers late selection)
+  useEffect(() => {
+    if (modalMode === 'add' && selectedLocation?.iata_code) {
+      setForm(prev => ({ ...prev, destination: selectedLocation.iata_code }));
+    }
+  }, [selectedLocation, modalMode]);
+
+  const openAdd = () => {
+    setActiveMawb(null);
     setForm({
-      mawb_no: m.mawb_no, mawb_date: m.mawb_date?.slice(0,10) || '',
-      airline_code: m.airline_code || '', origin: m.origin, destination: m.destination,
-      flight_no: m.flight_no || '', flight_origin_date: m.flight_origin_date?.slice(0,10) || '',
-      igm_no: m.igm_no || '', igm_date: m.igm_date?.slice(0,10) || '',
-      shipment_type: m.shipment_type, total_packages: m.total_packages,
-      gross_weight: m.gross_weight, item_description: m.item_description || '',
-      special_handling_code: m.special_handling_code || '', uld_number: m.uld_number || '',
-      customs_house_code: m.customs_house_code || '', profile_id: m.profile_id || '',
+      ...emptyForm,
+      destination: selectedLocation?.iata_code || '',
+      customs_house_code: user?.customs_house_code || '',
+      profile_id: user?.profile_id || '',
     });
-    setShowModal(true);
+    setModalMode('add');
+  };
+
+  const openEdit = (m: Mawb) => {
+    setActiveMawb(m);
+    setForm({
+      mawb_no: m.mawb_no, mawb_date: m.mawb_date?.slice(0, 10) || '',
+      origin: m.origin, destination: m.destination,
+      total_packages: m.total_packages, gross_weight: m.gross_weight,
+      customs_house_code: m.customs_house_code || '',
+      profile_id: m.profile_id || '',
+      flight_no: m.flight_no || '', flight_origin_date: m.flight_origin_date?.slice(0, 10) || '',
+      igm_no: m.igm_no || '', igm_date: m.igm_date?.slice(0, 10) || '',
+    });
+    setModalMode('edit');
+  };
+
+  const openPart = (m: Mawb) => {
+    setActiveMawb(m);
+    setForm({
+      mawb_no: m.mawb_no, mawb_date: m.mawb_date?.slice(0, 10) || '',
+      origin: m.origin, destination: m.destination,
+      total_packages: m.total_packages, gross_weight: m.gross_weight,
+      customs_house_code: m.customs_house_code || '', profile_id: m.profile_id || '',
+      flight_no: m.flight_no || '', flight_origin_date: m.flight_origin_date?.slice(0, 10) || '',
+      igm_no: m.igm_no || '', igm_date: m.igm_date?.slice(0, 10) || '',
+    });
+    setModalMode('part');
+  };
+
+  const openAmend = (m: Mawb) => {
+    setActiveMawb(m);
+    setForm({
+      mawb_no: m.mawb_no, mawb_date: m.mawb_date?.slice(0, 10) || '',
+      origin: m.origin, destination: m.destination,
+      total_packages: m.total_packages, gross_weight: m.gross_weight,
+      customs_house_code: m.customs_house_code || '', profile_id: m.profile_id || '',
+      flight_no: m.flight_no || '', flight_origin_date: m.flight_origin_date?.slice(0, 10) || '',
+      igm_no: m.igm_no || '', igm_date: m.igm_date?.slice(0, 10) || '',
+    });
+    setModalMode('amend');
+  };
+
+  const openDeleteConfirm = (m: Mawb) => {
+    setActiveMawb(m);
+    setForm({
+      mawb_no: m.mawb_no, mawb_date: m.mawb_date?.slice(0, 10) || '',
+      origin: m.origin, destination: m.destination,
+      total_packages: m.total_packages, gross_weight: m.gross_weight,
+      customs_house_code: m.customs_house_code || '', profile_id: m.profile_id || '',
+      flight_no: m.flight_no || '', flight_origin_date: m.flight_origin_date?.slice(0, 10) || '',
+      igm_no: m.igm_no || '', igm_date: m.igm_date?.slice(0, 10) || '',
+    });
+    setModalMode('delete-confirm');
   };
 
   const handleSave = async () => {
     if (!form.mawb_no || !form.origin || !form.destination) {
       toast.error('MAWB No, Origin and Destination are required'); return;
     }
+    if (modalMode === 'add' && form.mawb_no.length !== 11) {
+      toast.error('MAWB number must be exactly 11 digits'); return;
+    }
     setSaving(true);
     try {
-      if (editId) {
-        await api.put(`/mawbs/${editId}`, form);
-        toast.success('MAWB updated');
-      } else {
+      if (modalMode === 'add') {
         await api.post('/mawbs', form);
         toast.success('MAWB created');
+      } else if (modalMode === 'edit' && activeMawb) {
+        await api.put(`/mawbs/${activeMawb.id}`, form);
+        toast.success('MAWB updated');
+      } else if (modalMode === 'part' && activeMawb) {
+        const res = await api.post(`/mawbs/part/${activeMawb.id}`, form);
+        toast.success(`Part MAWB created: ${res.data.mawb_no}`);
+      } else if (modalMode === 'amend' && activeMawb) {
+        const res = await api.post(`/mawbs/amend/${activeMawb.id}`, form);
+        toast.success(`Amended MAWB created: ${res.data.mawb_no}`);
       }
-      setShowModal(false);
+      setModalMode(null);
       fetchMawbs();
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Save failed');
     } finally { setSaving(false); }
   };
 
-  const handleDelete = async (id: string, mawbNo: string) => {
-    if (!window.confirm(`Delete MAWB ${mawbNo}? This will also delete all related HAWBs.`)) return;
+  const handlePermanentDelete = async () => {
+    if (!activeMawb) return;
+    setSaving(true);
     try {
-      await api.delete(`/mawbs/${id}`);
-      toast.success('MAWB deleted');
+      await api.delete(`/mawbs/${activeMawb.id}`);
+      toast.success('MAWB permanently deleted');
+      setModalMode(null);
       fetchMawbs();
     } catch { toast.error('Delete failed'); }
+    finally { setSaving(false); }
   };
 
-  const f = (v: keyof MawbForm, val: string) => setForm(p => ({ ...p, [v]: val }));
+  const handleDeleteCopy = async () => {
+    if (!activeMawb) return;
+    setSaving(true);
+    try {
+      const res = await api.post(`/mawbs/delete-copy/${activeMawb.id}`, form);
+      toast.success(`Delete copy created: ${res.data.mawb_no}`);
+      setModalMode(null);
+      fetchMawbs();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed');
+    } finally { setSaving(false); }
+  };
+
+  const handleDownload = async (m: Mawb) => {
+    try {
+      const res = await api.post(`/transmissions/generate-cgm/${m.id}`, {}, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      const disp = res.headers['content-disposition'] || '';
+      const match = disp.match(/filename="?([^"]+)"?/);
+      link.href = url;
+      link.download = match ? match[1] : `${m.mawb_no}.cgm`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+      toast.success('CGM file downloaded');
+      fetchMawbs();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Download failed');
+    }
+  };
+
+  const f = (k: keyof MawbForm, v: string) => setForm(p => ({ ...p, [k]: v }));
+
+  const msgTypeBadge = (t?: string) => {
+    const map: Record<string, string> = { F: 'badge-info', A: 'badge-warning', D: 'badge-danger' };
+    const labels: Record<string, string> = { F: 'Fresh', A: 'Amend', D: 'Delete' };
+    return <span className={`badge ${map[t || 'F'] || 'badge-gray'}`}>{labels[t || 'F'] || t}</span>;
+  };
 
   const statusBadge = (s: string) => {
     const map: Record<string, string> = { draft: 'badge-gray', transmitted: 'badge-info', acknowledged: 'badge-success', error: 'badge-danger' };
     return <span className={`badge ${map[s] || 'badge-gray'}`}>{s}</span>;
+  };
+
+  const showFlightDetails = modalMode === 'edit' || modalMode === 'part' || modalMode === 'amend' || modalMode === 'delete-confirm';
+  const mawbNoDisabled = modalMode === 'edit';
+
+  const modalTitle: Record<string, string> = {
+    add: 'Add New MAWB', edit: 'Edit MAWB',
+    part: `Part MAWB — ${activeMawb?.mawb_no}`,
+    amend: `Amend MAWB — ${activeMawb?.mawb_no}`,
+    'delete-confirm': `Delete MAWB — ${activeMawb?.mawb_no}`,
   };
 
   return (
@@ -101,7 +218,7 @@ const MawbPage: React.FC = () => {
       <div className="flex-between mb-16">
         <div>
           <h1 className="page-title">Master Airway Bills (MAWB)</h1>
-          <p className="page-subtitle">Manage consol master airway bills for ICES 1.5 transmission</p>
+          <p className="page-subtitle">Manage consol master airway bills for ICES 1.5 CGM transmission</p>
         </div>
         <button className="btn btn-primary" onClick={openAdd}>+ Add New MAWB</button>
       </div>
@@ -116,11 +233,11 @@ const MawbPage: React.FC = () => {
                 placeholder="Search by MAWB No. or Origin..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && fetchMawbs()}
+                onKeyDown={e => { if (e.key === 'Enter') { setPage(1); fetchMawbs(1, pageSize); } }}
                 style={{ margin: 0 }}
               />
             </div>
-            <button className="btn btn-secondary btn-sm" onClick={fetchMawbs}>Search</button>
+            <button className="btn btn-secondary btn-sm" onClick={() => { setPage(1); fetchMawbs(1, pageSize); }}>Search</button>
           </div>
         </div>
 
@@ -134,109 +251,157 @@ const MawbPage: React.FC = () => {
               <p>Click "Add New MAWB" to create your first master airway bill.</p>
             </div>
           ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>MAWB No.</th>
-                  <th>Origin</th>
-                  <th>Dest</th>
-                  <th>Packages</th>
-                  <th>Gross Weight</th>
-                  <th>HAWBs</th>
-                  <th>Created</th>
-                  <th>Transmitted</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {mawbs.map(m => (
-                  <tr key={m.id}>
-                    <td><span className="font-mono" style={{ fontWeight: 600 }}>{m.mawb_no}</span></td>
-                    <td>{m.origin}</td>
-                    <td>{m.destination}</td>
-                    <td>{m.total_packages}</td>
-                    <td>{parseFloat(String(m.gross_weight)).toFixed(2)}</td>
-                    <td>
-                      <span
-                        style={{ color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }}
-                        onClick={() => navigate(`/hawb?mawb_id=${m.id}&mawb_no=${m.mawb_no}`)}
-                      >
-                        {m.hawb_count || 0} HAWBs
-                      </span>
-                    </td>
-                    <td className="text-muted text-sm">{new Date(m.created_at).toLocaleString('en-IN')}</td>
-                    <td className="text-muted text-sm">
-                      {m.transmission_date ? new Date(m.transmission_date).toLocaleString('en-IN') : '—'}
-                    </td>
-                    <td>{statusBadge(m.status)}</td>
-                    <td>
-                      <div className="td-actions">
-                        <button className="btn-link" onClick={() => openEdit(m)}>Edit</button>
-                        <span style={{ color: 'var(--border)' }}>|</span>
-                        <button className="btn-link" onClick={() => navigate(`/hawb?mawb_id=${m.id}&mawb_no=${m.mawb_no}`)}>Part</button>
-                        <span style={{ color: 'var(--border)' }}>|</span>
-                        <button className="btn-link" onClick={() => navigate(`/transmission/generate?mawb_id=${m.id}`)}>Amend</button>
-                        <span style={{ color: 'var(--border)' }}>|</span>
-                        <button className="btn-link danger" onClick={() => handleDelete(m.id, m.mawb_no)}>Delete</button>
-                      </div>
-                    </td>
+            <>
+              <table>
+                <thead>
+                  <tr>
+                    <th>MAWB No.</th>
+                    <th>Type</th>
+                    <th>Origin</th>
+                    <th>Dest</th>
+                    <th>Packages</th>
+                    <th>Weight (KG)</th>
+                    <th>HAWBs</th>
+                    <th>Status</th>
+                    <th>Transmitted</th>
+                    <th>Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {mawbs.map(m => (
+                    <tr key={m.id}>
+                      <td><span className="font-mono" style={{ fontWeight: 600 }}>{m.mawb_no}</span></td>
+                      <td>{msgTypeBadge(m.message_type)}</td>
+                      <td>{m.origin}</td>
+                      <td>{m.destination}</td>
+                      <td>{m.total_packages}</td>
+                      <td>{parseFloat(String(m.gross_weight)).toFixed(2)}</td>
+                      <td>
+                        <span
+                          style={{ color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }}
+                          onClick={() => navigate(`/hawb?mawb_id=${m.id}&mawb_no=${m.mawb_no}`)}
+                        >
+                          {m.hawb_count || 0} HAWBs
+                        </span>
+                      </td>
+                      <td>{statusBadge(m.status)}</td>
+                      <td className="text-muted text-sm">{fmtDateTime(m.transmission_date)}</td>
+                      <td>
+                        <div className="td-actions">
+                          <button className="btn-link" onClick={() => openEdit(m)}>Edit</button>
+                          <span style={{ color: 'var(--border)' }}>|</span>
+                          <button className="btn-link" onClick={() => openPart(m)}>Part</button>
+                          <span style={{ color: 'var(--border)' }}>|</span>
+                          <button className="btn-link" onClick={() => openAmend(m)}>Amend</button>
+                          <span style={{ color: 'var(--border)' }}>|</span>
+                          <button className="btn-link danger" onClick={() => openDeleteConfirm(m)}>Delete</button>
+                          <span style={{ color: 'var(--border)' }}>|</span>
+                          <button className="btn-link" onClick={() => handleDownload(m)}>Download</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <Pagination
+                total={total} page={page} pageSize={pageSize}
+                onPage={p => { setPage(p); fetchMawbs(p, pageSize); }}
+                onPageSize={ps => { setPageSize(ps); setPage(1); fetchMawbs(1, ps); }}
+              />
+            </>
           )}
         </div>
       </div>
 
-      {/* MAWB Modal */}
-      {showModal && (
-        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setShowModal(false); }}>
+      {/* MAWB Modal (Add / Edit / Part / Amend) */}
+      {modalMode && modalMode !== 'delete-confirm' && (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setModalMode(null); }}>
           <div className="modal modal-lg">
             <div className="modal-header">
-              <span className="modal-title">{editId ? 'Edit MAWB' : 'Add New MAWB'}</span>
-              <button className="modal-close" onClick={() => setShowModal(false)}>×</button>
+              <span className="modal-title">{modalTitle[modalMode]}</span>
+              <button className="modal-close" onClick={() => setModalMode(null)}>×</button>
             </div>
             <div className="modal-body">
-              {/* Flight & MAWB Details */}
               <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>MAWB Details</p>
               <div className="form-row form-row-3">
                 <div className="form-group">
-                  <label className="form-label">MAWB No. <span className="required">*</span></label>
-                  <input className="form-control font-mono" value={form.mawb_no} onChange={e => f('mawb_no', e.target.value)} placeholder="e.g. 75555765765" />
+                  <label className="form-label">Master AWB No. <span className="required">*</span></label>
+                  <input
+                    className="form-control font-mono"
+                    value={form.mawb_no}
+                    onChange={e => {
+                      const max = modalMode === 'add' ? 11 : 20;
+                      if (e.target.value.length <= max) f('mawb_no', e.target.value);
+                    }}
+                    placeholder="e.g. 12345678901"
+                    maxLength={modalMode === 'add' ? 11 : 20}
+                    disabled={mawbNoDisabled}
+                    style={mawbNoDisabled ? { background: '#f1f5f9' } : {}}
+                  />
+                  {modalMode === 'add' && (
+                    <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                      Max 11 digits ({form.mawb_no.length}/11)
+                    </p>
+                  )}
+                  {(modalMode === 'part' || modalMode === 'amend') && (
+                    <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                      New number will be: {form.mawb_no}-{modalMode === 'part' ? 'P' : 'A'}
+                    </p>
+                  )}
                 </div>
                 <div className="form-group">
                   <label className="form-label">MAWB Date</label>
                   <input className="form-control" type="date" value={form.mawb_date} onChange={e => f('mawb_date', e.target.value)} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Airline Code</label>
-                  <input className="form-control" value={form.airline_code} onChange={e => f('airline_code', e.target.value)} placeholder="e.g. AI" maxLength={3} />
+                  <label className="form-label">Profile</label>
+                  <select className="form-control" value={form.profile_id} onChange={e => f('profile_id', e.target.value)}>
+                    <option value="">Select profile...</option>
+                    {profiles.map(p => <option key={p.id} value={p.id}>{p.profile_code} — {p.company_name}</option>)}
+                  </select>
                 </div>
               </div>
               <div className="form-row form-row-3">
                 <div className="form-group">
-                  <label className="form-label">Origin <span className="required">*</span></label>
-                  <select className="form-control" value={form.origin} onChange={e => f('origin', e.target.value)}>
-                    <option value="">Select origin...</option>
-                    {locations.map(l => <option key={l.iata_code} value={l.iata_code}>{l.iata_code} - {l.city_name}</option>)}
-                  </select>
+                  <label className="form-label">Port Of Origin <span className="required">*</span></label>
+                  {modalMode === 'add' ? (
+                    <input
+                      className="form-control font-mono"
+                      value={form.origin}
+                      onChange={e => f('origin', e.target.value.toUpperCase())}
+                      placeholder="e.g. DXB"
+                      maxLength={3}
+                    />
+                  ) : (
+                    <select className="form-control" value={form.origin} onChange={e => f('origin', e.target.value)}>
+                      <option value="">Select...</option>
+                      {locations.map(l => <option key={l.iata_code} value={l.iata_code}>{l.iata_code} — {l.city_name}</option>)}
+                    </select>
+                  )}
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Destination <span className="required">*</span></label>
-                  <select className="form-control" value={form.destination} onChange={e => f('destination', e.target.value)}>
-                    <option value="">Select destination...</option>
-                    {locations.map(l => <option key={l.iata_code} value={l.iata_code}>{l.iata_code} - {l.city_name}</option>)}
-                  </select>
+                  <label className="form-label">Port Of Destination <span className="required">*</span></label>
+                  {modalMode === 'add' ? (
+                    <input
+                      className="form-control font-mono"
+                      value={form.destination}
+                      disabled
+                      style={{ background: '#f1f5f9', cursor: 'not-allowed' }}
+                      title="Auto-filled from selected login location"
+                    />
+                  ) : (
+                    <select className="form-control" value={form.destination} onChange={e => f('destination', e.target.value)}>
+                      <option value="">Select...</option>
+                      {locations.map(l => <option key={l.iata_code} value={l.iata_code}>{l.iata_code} — {l.city_name}</option>)}
+                    </select>
+                  )}
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Shipment Type</label>
-                  <select className="form-control" value={form.shipment_type} onChange={e => f('shipment_type', e.target.value)}>
-                    {SHIPMENT_TYPES.map(s => <option key={s.v} value={s.v}>{s.l}</option>)}
-                  </select>
+                  <label className="form-label">Item Description</label>
+                  <input className="form-control" value="CONSOL" disabled style={{ background: '#f1f5f9', fontWeight: 600 }} />
                 </div>
               </div>
-              <div className="form-row form-row-4">
+              <div className="form-row form-row-2">
                 <div className="form-group">
                   <label className="form-label">Total Packages</label>
                   <input className="form-control" type="number" value={form.total_packages} onChange={e => f('total_packages', e.target.value)} min={0} />
@@ -245,60 +410,80 @@ const MawbPage: React.FC = () => {
                   <label className="form-label">Gross Weight (KGS)</label>
                   <input className="form-control" type="number" step="0.001" value={form.gross_weight} onChange={e => f('gross_weight', e.target.value)} min={0} />
                 </div>
-                <div className="form-group">
-                  <label className="form-label">ULD Number</label>
-                  <input className="form-control" value={form.uld_number} onChange={e => f('uld_number', e.target.value)} placeholder="e.g. ULD XXX" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Special Handling Code</label>
-                  <input className="form-control" value={form.special_handling_code} onChange={e => f('special_handling_code', e.target.value)} placeholder="e.g. PER" maxLength={15} />
-                </div>
               </div>
-              <div className="form-group">
-                <label className="form-label">Item Description</label>
-                <input className="form-control" value={form.item_description} onChange={e => f('item_description', e.target.value)} placeholder="e.g. CONSOL, GARMENTS, MACHINERY PARTS" maxLength={100} />
-              </div>
-              <div className="divider" />
-              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>Flight Details</p>
-              <div className="form-row form-row-2">
-                <div className="form-group">
-                  <label className="form-label">Flight No.</label>
-                  <input className="form-control" value={form.flight_no} onChange={e => f('flight_no', e.target.value)} placeholder="e.g. AI123" maxLength={15} />
+
+              {/* Flight details – only shown in edit/part/amend */}
+              {showFlightDetails && (
+                <>
+                  <div className="divider" />
+                  <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>Flight Details</p>
+                  <div className="form-row form-row-2">
+                    <div className="form-group">
+                      <label className="form-label">Flight No.</label>
+                      <input className="form-control" value={form.flight_no} onChange={e => f('flight_no', e.target.value)} placeholder="e.g. AI123" maxLength={15} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Flight Date</label>
+                      <input className="form-control" type="date" value={form.flight_origin_date} onChange={e => f('flight_origin_date', e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="form-row form-row-2">
+                    <div className="form-group">
+                      <label className="form-label">IGM No.</label>
+                      <input className="form-control" value={form.igm_no} onChange={e => f('igm_no', e.target.value)} placeholder="Enter IGM No" maxLength={7} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">IGM Date</label>
+                      <input className="form-control" type="date" value={form.igm_date} onChange={e => f('igm_date', e.target.value)} />
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setModalMode(null)}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+                {saving ? <><span className="spinner" style={{ width: 12, height: 12 }}></span> Saving...</> : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirm Dialog */}
+      {modalMode === 'delete-confirm' && activeMawb && (
+        <div className="modal-overlay">
+          <div className="modal" style={{ maxWidth: 500 }}>
+            <div className="modal-header">
+              <span className="modal-title">Delete MAWB — {activeMawb.mawb_no}</span>
+              <button className="modal-close" onClick={() => setModalMode(null)}>×</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ marginBottom: 16 }}>Choose how to delete this MAWB:</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
+                  <div style={{ fontWeight: 600, marginBottom: 4 }}>1. Permanent Delete</div>
+                  <p className="text-muted text-sm" style={{ marginBottom: 12 }}>
+                    Completely removes this MAWB and all its HAWBs from the system. Cannot be undone.
+                  </p>
+                  <button className="btn btn-sm" style={{ background: '#ef4444', color: '#fff' }} onClick={handlePermanentDelete} disabled={saving}>
+                    Permanently Delete
+                  </button>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Flight Origin Date</label>
-                  <input className="form-control" type="date" value={form.flight_origin_date} onChange={e => f('flight_origin_date', e.target.value)} />
-                </div>
-              </div>
-              <div className="form-row form-row-2">
-                <div className="form-group">
-                  <label className="form-label">IGM No.</label>
-                  <input className="form-control" value={form.igm_no} onChange={e => f('igm_no', e.target.value)} placeholder="7-digit IGM number" maxLength={7} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">IGM Date</label>
-                  <input className="form-control" type="date" value={form.igm_date} onChange={e => f('igm_date', e.target.value)} />
-                </div>
-              </div>
-              <div className="form-row form-row-2">
-                <div className="form-group">
-                  <label className="form-label">Customs House Code</label>
-                  <input className="form-control" value={form.customs_house_code} onChange={e => f('customs_house_code', e.target.value)} placeholder="e.g. INDEL4" maxLength={6} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Profile</label>
-                  <select className="form-control" value={form.profile_id} onChange={e => f('profile_id', e.target.value)}>
-                    <option value="">Select profile...</option>
-                    {profiles.map(p => <option key={p.id} value={p.id}>{p.profile_code} - {p.company_name}</option>)}
-                  </select>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
+                  <div style={{ fontWeight: 600, marginBottom: 4 }}>2. Delete &amp; Copy (message type D)</div>
+                  <p className="text-muted text-sm" style={{ marginBottom: 12 }}>
+                    Creates a new MAWB with suffix <strong>-D1</strong> and message type D for customs submission.
+                    New number: <strong>{activeMawb.mawb_no.replace(/-[APD]\d+$/, '')}-D?</strong>
+                  </p>
+                  <button className="btn btn-sm btn-secondary" onClick={handleDeleteCopy} disabled={saving}>
+                    Delete &amp; Copy
+                  </button>
                 </div>
               </div>
             </div>
             <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-                {saving ? <><span className="spinner" style={{ width: 12, height: 12 }}></span> Saving...</> : (editId ? 'Update MAWB' : 'Create MAWB')}
-              </button>
+              <button className="btn btn-secondary" onClick={() => setModalMode(null)}>Cancel</button>
             </div>
           </div>
         </div>

@@ -3,14 +3,15 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
 interface DropdownItem { label: string; path: string; }
-interface NavItem { label: string; path?: string; items?: DropdownItem[]; adminOnly?: boolean; }
+interface NavItem { label: string; path?: string; items?: DropdownItem[]; adminOnly?: boolean; noUser?: boolean; }
 
 const NAV_ITEMS: NavItem[] = [
   { label: 'MAWB', path: '/mawb' },
   {
     label: 'HAWB',
     items: [
-      { label: 'Add New HAWB', path: '/hawb/new' },
+      { label: 'Add House AWB', path: '/hawb/new' },
+      { label: 'Add Multiple Hawbs', path: '/hawb/add-multiple' },
       { label: 'View All HAWBs', path: '/hawb' },
     ],
   },
@@ -29,17 +30,6 @@ const NAV_ITEMS: NavItem[] = [
     ],
   },
   { label: 'Location', path: '/location' },
-  { label: 'CAN / DO', path: '/can-do' },
-  {
-    label: 'Air Manifest',
-    items: [
-      { label: 'Add IGM Flight', path: '/air-manifest/igm-flight' },
-      { label: 'Add/Edit IGM MAWBs', path: '/air-manifest/igm-mawbs' },
-      { label: 'Add EGM Flights', path: '/air-manifest/egm-flights' },
-      { label: 'Add/Edit EGM MAWBs', path: '/air-manifest/egm-mawbs' },
-      { label: 'Transmit AIR Manifest', path: '/air-manifest/transmit' },
-    ],
-  },
   {
     label: 'Admin',
     adminOnly: true,
@@ -55,6 +45,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     label: 'Accounting',
+    adminOnly: true,   // hidden from regular 'user' role
     items: [
       { label: 'View Invoice', path: '/accounting/invoice' },
       { label: 'Statement', path: '/accounting/statement' },
@@ -83,7 +74,7 @@ const Dropdown = ({ items, onClose }: { items: DropdownItem[]; onClose: () => vo
 };
 
 export const Navbar: React.FC = () => {
-  const { user, logout, hasRole } = useAuth();
+  const { user, logout, hasRole, selectedLocation } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
@@ -140,7 +131,11 @@ export const Navbar: React.FC = () => {
       </div>
       <div className="nav-right">
         <span className="nav-user">
-          {user?.username?.toUpperCase()} - {user?.customs_house_code || user?.profile_code || 'N/A'}
+          {user?.username?.toUpperCase()}
+          {selectedLocation
+            ? ` — ${selectedLocation.iata_code} (${selectedLocation.customs_house_code || selectedLocation.iata_code})`
+            : ` (${user?.customs_house_code || 'N/A'})`
+          }
         </span>
         <button className="nav-link" onClick={logout}>Logout</button>
       </div>

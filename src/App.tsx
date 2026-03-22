@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import Navbar from './components/Navbar';
@@ -9,13 +9,17 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
 import MawbPage from './pages/MawbPage';
 import HawbPage from './pages/HawbPage';
+import MultipleHawbPage from './pages/MultipleHawbPage';
 import TransmissionPage from './pages/TransmissionPage';
 import LocationPage from './pages/LocationPage';
-import { RegisterUserPage, RegisterProfilePage, ChangePasswordPage } from './pages/AdminPages';
+import CanDoPage from './pages/CanDoPage';
+import AccountingPage from './pages/AccountingPage';
+import { ChecklistPage, AccountStatementPage } from './pages/ReportPages';
 import {
-  ChecklistPage, AccountStatementPage, CanDoPage,
-  AirManifestPage, AccountingPage, NotFoundPage
-} from './pages/Placeholders';
+  RegisterUserPage, RegisterProfilePage, ChangePasswordPage,
+  StatementConsolPage, StatementHawbPage, DownloadFilePage, ChangeInvoicePage,
+} from './pages/AdminPages';
+import { NotFoundPage } from './pages/Placeholders';
 
 const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <>
@@ -25,7 +29,8 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 );
 
 const AppRoutes: React.FC = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, needsLocationSelect } = useAuth();
+  const currentPath = useLocation().pathname;
 
   if (!isAuthenticated) {
     return (
@@ -33,6 +38,17 @@ const AppRoutes: React.FC = () => {
         <Route path="/login" element={<Login />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
+    );
+  }
+
+  // Force location selection before accessing any other page
+  if (needsLocationSelect && currentPath !== '/location') {
+    return (
+      <AppLayout>
+        <Routes>
+          <Route path="*" element={<Navigate to="/location" replace />} />
+        </Routes>
+      </AppLayout>
     );
   }
 
@@ -48,6 +64,7 @@ const AppRoutes: React.FC = () => {
         {/* HAWB */}
         <Route path="/hawb" element={<ProtectedRoute><HawbPage /></ProtectedRoute>} />
         <Route path="/hawb/new" element={<ProtectedRoute><HawbPage /></ProtectedRoute>} />
+        <Route path="/hawb/add-multiple" element={<ProtectedRoute><MultipleHawbPage /></ProtectedRoute>} />
 
         {/* Reports */}
         <Route path="/report/checklist" element={<ProtectedRoute><ChecklistPage /></ProtectedRoute>} />
@@ -63,17 +80,18 @@ const AppRoutes: React.FC = () => {
         {/* CAN/DO */}
         <Route path="/can-do" element={<ProtectedRoute><CanDoPage /></ProtectedRoute>} />
 
-        {/* Air Manifest */}
-        <Route path="/air-manifest/*" element={<ProtectedRoute><AirManifestPage /></ProtectedRoute>} />
+        {/* Accounting – admin only */}
+        <Route path="/accounting/*" element={<ProtectedRoute roles={['master_admin', 'admin']}><AccountingPage /></ProtectedRoute>} />
 
         {/* Admin */}
         <Route path="/admin/register-user" element={<ProtectedRoute roles={['master_admin', 'admin']}><RegisterUserPage /></ProtectedRoute>} />
         <Route path="/admin/register-profile" element={<ProtectedRoute roles={['master_admin', 'admin']}><RegisterProfilePage /></ProtectedRoute>} />
         <Route path="/admin/change-password" element={<ProtectedRoute><ChangePasswordPage /></ProtectedRoute>} />
+        <Route path="/admin/statement-consol" element={<ProtectedRoute roles={['master_admin', 'admin']}><StatementConsolPage /></ProtectedRoute>} />
+        <Route path="/admin/statement-hawb" element={<ProtectedRoute roles={['master_admin', 'admin']}><StatementHawbPage /></ProtectedRoute>} />
+        <Route path="/admin/download-file" element={<ProtectedRoute roles={['master_admin', 'admin']}><DownloadFilePage /></ProtectedRoute>} />
+        <Route path="/admin/change-invoice" element={<ProtectedRoute roles={['master_admin', 'admin']}><ChangeInvoicePage /></ProtectedRoute>} />
         <Route path="/admin/*" element={<ProtectedRoute roles={['master_admin', 'admin']}><NotFoundPage /></ProtectedRoute>} />
-
-        {/* Accounting */}
-        <Route path="/accounting/*" element={<ProtectedRoute><AccountingPage /></ProtectedRoute>} />
 
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
