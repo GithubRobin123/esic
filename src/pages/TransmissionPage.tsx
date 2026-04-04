@@ -22,7 +22,7 @@ const TransmissionPage: React.FC = () => {
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    api.get('/mawbs', { params: { pageSize: 1000 } }).then(r => setMawbs(r.data.data ?? [])).catch(() => {});
+    api.get('/mawbs', { params: { pageSize: 1000, status: 'draft' } }).then(r => setMawbs(r.data.data ?? [])).catch(() => {});
     api.get('/transmissions/history').then(r => setHistory(r.data)).catch(() => {});
   }, []);
 
@@ -35,14 +35,14 @@ const TransmissionPage: React.FC = () => {
     setMawbSearch(val);
     if (searchTimer.current) clearTimeout(searchTimer.current);
     if (!val.trim()) {
-      // Reload default 1000
-      api.get('/mawbs', { params: { pageSize: 1000 } }).then(r => setMawbs(r.data.data ?? [])).catch(() => {});
+      // Reload default 1000 — draft only
+      api.get('/mawbs', { params: { pageSize: 1000, status: 'draft' } }).then(r => setMawbs(r.data.data ?? [])).catch(() => {});
       return;
     }
     searchTimer.current = setTimeout(async () => {
       setSearchLoading(true);
       try {
-        const res = await api.get('/mawbs', { params: { pageSize: 50, search: val.trim() } });
+        const res = await api.get('/mawbs', { params: { pageSize: 50, search: val.trim(), status: 'draft' } });
         setMawbs(res.data.data ?? []);
       } catch { /* ignore */ } finally { setSearchLoading(false); }
     }, 400);
@@ -61,6 +61,25 @@ const TransmissionPage: React.FC = () => {
 
   const handleDownload = async () => {
     if (!selectedMawbId) { toast.error('Select a MAWB first'); return; }
+    // Validate weight/package match
+    const mawb = mawbs.find(m => m.id === selectedMawbId);
+    if (mawb) {
+      try {
+        const hawbRes = await api.get('/hawbs', { params: { mawb_id: selectedMawbId, pageSize: 1000 } });
+        const hawbs = hawbRes.data.data || [];
+        if (hawbs.length > 0) {
+          const totalPkg = hawbs.reduce((s: number, h: any) => s + Number(h.total_packages), 0);
+          const totalWt = hawbs.reduce((s: number, h: any) => s + parseFloat(h.gross_weight), 0);
+          const errors: string[] = [];
+          if (Number(mawb.total_packages) !== totalPkg) errors.push(`Packages mismatch: MAWB ${mawb.total_packages} ≠ HAWBs total ${totalPkg}`);
+          if (Math.abs(parseFloat(String(mawb.gross_weight)) - totalWt) > 0.01) errors.push(`Weight mismatch: MAWB ${parseFloat(String(mawb.gross_weight)).toFixed(2)} ≠ HAWBs total ${totalWt.toFixed(2)} KGS`);
+          if (errors.length > 0) {
+            toast.error(errors.join('\n'), { duration: 5000 });
+            return;
+          }
+        }
+      } catch { /* continue if validation fetch fails */ }
+    }
     try {
       const res = await api.post(`/transmissions/generate-cgm/${selectedMawbId}`, {});
       const { fileName, fileContent } = res.data;
@@ -71,7 +90,6 @@ const TransmissionPage: React.FC = () => {
       link.click();
       window.URL.revokeObjectURL(url);
       toast.success(`Downloaded: ${fileName}`);
-      // Refresh history
       api.get('/transmissions/history').then(r => setHistory(r.data)).catch(() => {});
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Download failed');
@@ -122,7 +140,7 @@ const TransmissionPage: React.FC = () => {
                     <option value="">Choose a MAWB...</option>
                     {mawbs.map(m => (
                       <option key={m.id} value={m.id}>
-                        {m.mawb_no} — {m.origin}→{m.destination} ({m.hawb_count || 0} HAWBs)
+                        {m.mawb_no.replace(/-[APD]\d+$/, '')} ({m.hawb_count || 0} HAWBs)
                       </option>
                     ))}
                   </select>

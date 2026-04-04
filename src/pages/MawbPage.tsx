@@ -34,12 +34,17 @@ const MawbPage: React.FC = () => {
   const fetchMawbs = useCallback(async (p = page, ps = pageSize) => {
     setLoading(true);
     try {
-      const res = await api.get('/mawbs', { params: { page: p, pageSize: ps, ...(search ? { search } : {}) } });
+      const res = await api.get('/mawbs', { params: {
+        page: p,
+        pageSize: ps,
+        ...(search ? { search } : {}),
+        ...(selectedLocation?.customs_house_code ? { customs_house_code: selectedLocation.customs_house_code } : {}),
+      } });
       setMawbs(res.data.data);
       setTotal(res.data.total);
     } catch { toast.error('Failed to load MAWBs'); }
     finally { setLoading(false); }
-  }, [search, page, pageSize]);
+  }, [search, page, pageSize, selectedLocation?.customs_house_code]);
 
   useEffect(() => { fetchMawbs(); }, [fetchMawbs]);
 
@@ -192,6 +197,19 @@ const MawbPage: React.FC = () => {
   };
 
   const handleDownload = async (m: Mawb) => {
+    const hawbRes = await api.get('/hawbs', { params: { mawb_id: m.id, pageSize: 1000 } });
+    const hawbs = hawbRes.data.data || [];
+    if (hawbs.length > 0) {
+      const totalPkg = hawbs.reduce((s: number, h: any) => s + Number(h.total_packages), 0);
+      const totalWt = hawbs.reduce((s: number, h: any) => s + parseFloat(h.gross_weight), 0);
+      const errors: string[] = [];
+      if (Number(m.total_packages) !== totalPkg) errors.push(`Packages mismatch: MAWB has ${m.total_packages} but HAWBs total ${totalPkg}`);
+      if (Math.abs(parseFloat(String(m.gross_weight)) - totalWt) > 0.01) errors.push(`Weight mismatch: MAWB has ${parseFloat(String(m.gross_weight)).toFixed(2)} KGS but HAWBs total ${totalWt.toFixed(2)} KGS`);
+      if (errors.length > 0) {
+        toast.error(errors.join('\n'), { duration: 5000 });
+        return;
+      }
+    }
     try {
       const res = await api.post(`/transmissions/generate-cgm/${m.id}`, {});
       const { fileName, fileContent } = res.data;
@@ -222,6 +240,8 @@ const MawbPage: React.FC = () => {
       return updated;
     });
   };
+
+  const isFreshMawb = (mawbNo: string) => !/-[APD]\d/.test(mawbNo);
 
   const msgTypeBadge = (t?: string) => {
     const map: Record<string, string> = { F: 'badge-info', A: 'badge-warning', D: 'badge-danger' };
@@ -322,14 +342,20 @@ const MawbPage: React.FC = () => {
                       <td>
                         <div className="td-actions">
                           <button className="btn-link" onClick={() => openEdit(m)}>Edit</button>
-                          <span style={{ color: 'var(--border)' }}>|</span>
-                          <button className="btn-link" onClick={() => openPart(m)}>Part</button>
-                          <span style={{ color: 'var(--border)' }}>|</span>
-                          <button className="btn-link" onClick={() => openAmend(m)}>Amend</button>
+                          {isFreshMawb(m.mawb_no) && (
+                            <>
+                              <span style={{ color: 'var(--border)' }}>|</span>
+                              <button className="btn-link" onClick={() => openPart(m)}>Part</button>
+                              <span style={{ color: 'var(--border)' }}>|</span>
+                              <button className="btn-link" onClick={() => openAmend(m)}>Amend</button>
+                            </>
+                          )}
                           <span style={{ color: 'var(--border)' }}>|</span>
                           <button className="btn-link danger" onClick={() => openDeleteConfirm(m)}>Delete</button>
-                          <span style={{ color: 'var(--border)' }}>|</span>
-                          <button className="btn-link" onClick={() => handleDownload(m)}>Download</button>
+                          {m.status !== 'transmitted' && <span style={{ color: 'var(--border)' }}>|</span>}
+                          {m.status !== 'transmitted' && (
+                            <button className="btn-link" onClick={() => handleDownload(m)}>Download</button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -364,7 +390,7 @@ const MawbPage: React.FC = () => {
                 </div>
               )}
 
-              <div className="form-row form-row-2">
+              <div className="form-group" style={{ maxWidth: 280 }}>
                 <div className="form-group">
                   <label className="form-label">Master AWB No. <span className="required">*</span></label>
                   <input
@@ -372,7 +398,8 @@ const MawbPage: React.FC = () => {
                     value={form.mawb_no}
                     onChange={e => {
                       const max = modalMode === 'add' ? 11 : 20;
-                      if (e.target.value.length <= max) f('mawb_no', e.target.value);
+                      const clean = e.target.value.replace(/[^0-9]/g, '');
+                      if (clean.length <= max) f('mawb_no', clean);
                     }}
                     placeholder="e.g. 12345678901"
                     maxLength={modalMode === 'add' ? 11 : 20}
@@ -389,10 +416,6 @@ const MawbPage: React.FC = () => {
                       New number will be: {form.mawb_no}-{modalMode === 'part' ? 'P' : 'A'}
                     </p>
                   )}
-                </div>
-                <div className="form-group">
-                  <label className="form-label">MAWB Date</label>
-                  <input className="form-control" type="date" value={form.mawb_date} onChange={e => f('mawb_date', e.target.value)} />
                 </div>
               </div>
               <div className="form-row form-row-3">
@@ -486,10 +509,10 @@ const MawbPage: React.FC = () => {
               )}
             </div>
             <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setModalMode(null)}>Cancel</button>
               <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
                 {saving ? <><span className="spinner" style={{ width: 12, height: 12 }}></span> Saving...</> : 'Save'}
               </button>
+              <button className="btn btn-secondary" onClick={() => setModalMode(null)}>Cancel</button>
             </div>
           </div>
         </div>

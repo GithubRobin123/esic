@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './hooks/useAuth';
+import api from './utils/api';
 import Navbar from './components/Navbar';
 import ProtectedRoute from './components/ProtectedRoute';
 
@@ -100,7 +101,19 @@ const AppRoutes: React.FC = () => {
   );
 };
 
-const App: React.FC = () => (
+// Ping backend every 14 min to prevent Render free tier spin-down
+const useKeepAlive = () => {
+  useEffect(() => {
+    const ping = () => api.get('/health').catch(() => {});
+    ping(); // ping on mount
+    const id = setInterval(ping, 14 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
+};
+
+const App: React.FC = () => {
+  useKeepAlive();
+  return (
   <BrowserRouter>
     <AuthProvider>
       <AppRoutes />
@@ -121,6 +134,7 @@ const App: React.FC = () => (
       />
     </AuthProvider>
   </BrowserRouter>
-);
+  );
+};
 
 export default App;

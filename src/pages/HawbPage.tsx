@@ -5,6 +5,7 @@ import { Hawb, HawbForm, Mawb } from '../types';
 import toast from 'react-hot-toast';
 import { fmtDateTime } from '../utils/dateUtils';
 import Pagination from '../components/Pagination';
+import { useAuth } from '../hooks/useAuth';
 
 interface HawbPageProps {
   initialMode?: string;
@@ -22,6 +23,7 @@ const HawbPage: React.FC<HawbPageProps> = ({ initialMode }) => {
   const mawbIdFilter = params.get('mawb_id') || '';
   const mawbNoFilter = params.get('mawb_no') || '';
   const navigate = useNavigate();
+  const { selectedLocation } = useAuth();
 
   const [hawbs, setHawbs] = useState<Hawb[]>([]);
   const [total, setTotal] = useState(0);
@@ -50,18 +52,24 @@ const HawbPage: React.FC<HawbPageProps> = ({ initialMode }) => {
           page: p, pageSize: ps,
           ...(selectedMawbId ? { mawb_id: selectedMawbId } : {}),
           ...(search ? { search } : {}),
+          ...(selectedLocation?.customs_house_code ? { customs_house_code: selectedLocation.customs_house_code } : {}),
         }
       });
       setHawbs(res.data.data);
       setTotal(res.data.total);
     } catch { toast.error('Failed to load HAWBs'); }
     finally { setLoading(false); }
-  }, [selectedMawbId, search, page, pageSize]);
+  }, [selectedMawbId, search, page, pageSize, selectedLocation?.customs_house_code]);
 
   useEffect(() => { fetchHawbs(page, pageSize); }, [fetchHawbs]); // eslint-disable-line
   useEffect(() => {
-    api.get('/mawbs', { params: { pageSize: 1000 } }).then(r => setMawbs(r.data.data ?? [])).catch(() => {});
-  }, []);
+    api.get('/mawbs', {
+      params: {
+        pageSize: 1000,
+        ...(selectedLocation?.customs_house_code ? { customs_house_code: selectedLocation.customs_house_code } : {}),
+      }
+    }).then(r => setMawbs(r.data.data ?? [])).catch(() => {});
+  }, [selectedLocation?.customs_house_code]); // eslint-disable-line
 
   // When MAWB changes in the add form, auto-fill origin/destination
   const handleMawbSelect = (mawbId: string) => {
@@ -246,7 +254,7 @@ const HawbPage: React.FC<HawbPageProps> = ({ initialMode }) => {
               onChange={e => setSelectedMawbId(e.target.value)}
             >
               <option value="">All MAWBs</option>
-              {mawbs.map(m => <option key={m.id} value={m.id}>{m.mawb_no}</option>)}
+              {mawbs.map(m => <option key={m.id} value={m.id}>{m.mawb_no.replace(/-[APD]\d+$/, '')}</option>)}
             </select>
           </div>
           <button className="btn btn-primary btn-sm" onClick={openAdd}>+ Add House AWB</button>
@@ -324,7 +332,7 @@ const HawbPage: React.FC<HawbPageProps> = ({ initialMode }) => {
                   {modalMode === 'edit' ? (
                     // Edit: MAWB disabled
                     <select className="form-control" value={form.mawb_id} disabled style={{ background: '#f1f5f9' }}>
-                      {mawbs.map(m => <option key={m.id} value={m.id}>{m.mawb_no}</option>)}
+                      {mawbs.map(m => <option key={m.id} value={m.id}>{m.mawb_no.replace(/-[APD]\d+$/, '')}</option>)}
                     </select>
                   ) : modalMode === 'amend' ? (
                     // Amend: show amended MAWBs (children of parent)
@@ -339,7 +347,7 @@ const HawbPage: React.FC<HawbPageProps> = ({ initialMode }) => {
                     // Add: all MAWBs
                     <select className="form-control" value={form.mawb_id} onChange={e => handleMawbSelect(e.target.value)}>
                       <option value="">Select MAWB...</option>
-                      {mawbs.map(m => <option key={m.id} value={m.id}>{m.mawb_no}</option>)}
+                      {mawbs.map(m => <option key={m.id} value={m.id}>{m.mawb_no.replace(/-[APD]\d+$/, '')}</option>)}
                     </select>
                   )}
                 </div>
@@ -348,7 +356,7 @@ const HawbPage: React.FC<HawbPageProps> = ({ initialMode }) => {
                   <input
                     className="form-control font-mono"
                     value={form.hawb_no}
-                    onChange={e => f('hawb_no', e.target.value)}
+                    onChange={e => f('hawb_no', e.target.value.replace(/[^a-zA-Z0-9]/g, ''))}
                     placeholder="House AWB number"
                     disabled={modalMode === 'amend'}
                     style={modalMode === 'amend' ? { background: '#f1f5f9' } : {}}
@@ -376,15 +384,15 @@ const HawbPage: React.FC<HawbPageProps> = ({ initialMode }) => {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Item Description:</label>
-                  <input className="form-control" value={form.item_description} onChange={e => f('item_description', e.target.value)} placeholder="AS PER INVOICE" maxLength={100} />
+                  <input className="form-control" value={form.item_description} onChange={e => f('item_description', e.target.value.replace(/[^a-zA-Z0-9 .,\-/]/g, ''))} placeholder="AS PER INVOICE" maxLength={100} />
                 </div>
               </div>
             </div>
             <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setModalMode(null)}>Cancel</button>
               <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
                 {saving ? <><span className="spinner" style={{ width: 12, height: 12 }}></span> Saving...</> : 'Save'}
               </button>
+              <button className="btn btn-secondary" onClick={() => setModalMode(null)}>Cancel</button>
             </div>
           </div>
         </div>
