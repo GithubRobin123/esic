@@ -8,7 +8,6 @@ import { fmtDate, fmtDateTime } from '../utils/dateUtils';
 // ─── Register User ────────────────────────────────────────────────────────────
 export const RegisterUserPage: React.FC = () => {
   const [form, setForm] = useState({ username: '', password: '', full_name: '', email: '', role: 'user', profile_id: '' });
-  const [profiles, setProfiles] = useState<Profile[]>([]);
   const [saving, setSaving] = useState(false);
   const [users, setUsers] = useState<any[]>([]);
   const { hasRole } = useAuth();
@@ -68,16 +67,15 @@ export const RegisterUserPage: React.FC = () => {
   const loadUsers = () => api.get('/users').then(r => setUsers(r.data)).catch(() => {});
 
   useEffect(() => {
-    api.get('/profiles').then(r => setProfiles(r.data));
     loadUsers();
   }, []);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.username || !form.password || !form.full_name) { toast.error('Username, password, full name required'); return; }
+    if (!form.username || !form.password) { toast.error('Username and password required'); return; }
     setSaving(true);
     try {
-      await api.post('/users/register', form);
+      await api.post('/users/register', { ...form, full_name: form.username });
       toast.success(`User "${form.username}" created`);
       setForm({ username: '', password: '', full_name: '', email: '', role: 'user', profile_id: '' });
       loadUsers();
@@ -119,10 +117,6 @@ export const RegisterUserPage: React.FC = () => {
                 <input className="form-control" type="password" value={form.password} onChange={e => f('password', e.target.value)} placeholder="min 6 chars" />
               </div>
               <div className="form-group">
-                <label className="form-label">Full Name <span className="required">*</span></label>
-                <input className="form-control" value={form.full_name} onChange={e => f('full_name', e.target.value)} />
-              </div>
-              <div className="form-group">
                 <label className="form-label">Email</label>
                 <input className="form-control" type="email" value={form.email} onChange={e => f('email', e.target.value)} />
               </div>
@@ -132,13 +126,6 @@ export const RegisterUserPage: React.FC = () => {
                   <option value="user">User</option>
                   <option value="admin">Admin</option>
                   {hasRole(['master_admin']) && <option value="master_admin">Master Admin</option>}
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Profile / Company</label>
-                <select className="form-control" value={form.profile_id} onChange={e => f('profile_id', e.target.value)}>
-                  <option value="">None</option>
-                  {profiles.map(p => <option key={p.id} value={p.id}>{p.profile_code} - {p.company_name}</option>)}
                 </select>
               </div>
               <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={saving}>
@@ -322,7 +309,6 @@ const EMPTY_PROFILE_FORM = {
   user_prefix: '',
   consol_agent_id: '',
   user_email: '',
-  agent_name: '',
   address1: '',
   address2: '',
   gstin: '',
@@ -335,64 +321,143 @@ const EMPTY_PROFILE_FORM = {
   sea_consol_fcl_rate: '',
   air_manifest_rate: '',
   air_manifest_min_bill: '',
-  location_code: '',
-  // legacy fields still needed
   profile_code: '',
   company_name: '',
   carn_number: '',
   customs_house_code: '',
 };
 
-const ACC_LOC_LIST = [
-  { code: 'INDEL4', label: 'ACC Delhi' }, { code: 'INBOM4', label: 'ACC SAHAR (Mumbai)' },
-  { code: 'INMAA4', label: 'ACC Chennai' }, { code: 'INCCU4', label: 'ACC Kolkata' },
-  { code: 'INBLR4', label: 'ACC Bangalore' }, { code: 'INAMD4', label: 'ACC Ahmedabad' },
-  { code: 'INHYD4', label: 'ACC Hyderabad' }, { code: 'INTVJ4', label: 'ACC Trivandrum' },
-  { code: 'INJPR4', label: 'ACC Jaipur' }, { code: 'INGOI4', label: 'ACC Goa' },
-  { code: 'INATQ4', label: 'ACC Amritsar' }, { code: 'INCOK4', label: 'ACC Cochin' },
-  { code: 'INCJB4', label: 'ACC Coimbatore' }, { code: 'INVTZ4', label: 'ACC Vishakhapatnam' },
-];
-
 export const RegisterProfilePage: React.FC = () => {
   const [form, setForm] = useState({ ...EMPTY_PROFILE_FORM });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [filteredProfiles, setFilteredProfiles] = useState<Profile[]>([]);
+  const [profileTotal, setProfileTotal] = useState(0);
+  const [profilePage, setProfilePage] = useState(1);
+  const PROFILE_PAGE_SIZE = 10;
   const [users, setUsers] = useState<any[]>([]);
+  const [allLocations, setAllLocations] = useState<any[]>([]);
+  const [availableLocations, setAvailableLocations] = useState<any[]>([]);
+  const [selectedLocationCodes, setSelectedLocationCodes] = useState<string[]>([]);
   const [searchUserId, setSearchUserId] = useState('');
+  const [appliedUserId, setAppliedUserId] = useState('');
   const [saving, setSaving] = useState(false);
+  const [controlNumbers, setControlNumbers] = useState<Record<string, number>>({});
 
-  const loadProfiles = () => api.get('/profiles').then(r => {
-    setProfiles(r.data); setFilteredProfiles(r.data);
-  });
+  // User location access management
+  const [locAccessUserId, setLocAccessUserId] = useState('');
+  const [locAccessUserName, setLocAccessUserName] = useState('');
+  const [locAccessIds, setLocAccessIds] = useState<Set<string>>(new Set());
+  const [savingAccess, setSavingAccess] = useState(false);
+
+  const loadProfiles = (page = 1, userId = '') => {
+    const params: any = { page, pageSize: PROFILE_PAGE_SIZE };
+    if (userId) params.user_id = userId;
+    api.get('/profiles', { params }).then(r => {
+      setProfiles(r.data.data ?? []);
+      setProfileTotal(r.data.total ?? 0);
+      setProfilePage(r.data.page ?? 1);
+    }).catch(() => {});
+  };
+
+  const loadControlNumbers = () => api.get('/profiles/control-numbers').then(r => {
+    const map: Record<string, number> = {};
+    (r.data as any[]).forEach((row: any) => {
+      if (row.user_id && row.location_code) {
+        map[`${row.user_id}_${row.location_code}`] = row.control_number;
+      }
+    });
+    setControlNumbers(map);
+  }).catch(() => {});
 
   useEffect(() => {
-    loadProfiles();
+    loadProfiles(1, '');
+    loadControlNumbers();
     api.get('/users').then(r => setUsers(r.data)).catch(() => {});
+    api.get('/locations').then(r => setAllLocations(r.data)).catch(() => {});
   }, []);
 
+  // When user changes in form, load their allowed locations
+  const handleUserChange = async (userId: string) => {
+    setForm(p => ({ ...p, user_id: userId }));
+    setSelectedLocationCodes([]);
+    if (!userId) { setAvailableLocations(allLocations); return; }
+    try {
+      const res = await api.get(`/locations/user/${userId}`);
+      setAvailableLocations(res.data.length > 0 ? res.data : allLocations);
+    } catch { setAvailableLocations(allLocations); }
+  };
+
+  // Load user location access for the access panel
+  const handleLoadAccess = async (userId: string) => {
+    setLocAccessUserId(userId);
+    const u = users.find(x => x.id === userId);
+    setLocAccessUserName(u?.username || '');
+    if (!userId) { setLocAccessIds(new Set()); return; }
+    try {
+      const res = await api.get(`/locations/user/${userId}`);
+      setLocAccessIds(new Set((res.data as any[]).map((l: any) => l.id)));
+    } catch { toast.error('Failed to load location access'); }
+  };
+
+  const toggleLocAccess = (id: string) => setLocAccessIds(prev => {
+    const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next;
+  });
+
+  const saveLocAccess = async () => {
+    if (!locAccessUserId) return;
+    setSavingAccess(true);
+    try {
+      await api.put(`/locations/user/${locAccessUserId}`, { locationIds: Array.from(locAccessIds) });
+      toast.success(locAccessIds.size === 0
+        ? `All locations allowed for ${locAccessUserName}`
+        : `${locAccessIds.size} location(s) assigned to ${locAccessUserName}`);
+      // Refresh available locations if form user matches
+      if (form.user_id === locAccessUserId) handleUserChange(locAccessUserId);
+    } catch { toast.error('Failed to save access'); }
+    finally { setSavingAccess(false); }
+  };
+
+  const toggleSelectLocation = (code: string) => {
+    setSelectedLocationCodes(prev =>
+      prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code]
+    );
+  };
+
   const handleSearch = () => {
-    if (!searchUserId) { setFilteredProfiles(profiles); return; }
-    const u = users.find(x => x.id === searchUserId);
-    if (!u) { setFilteredProfiles([]); return; }
-    setFilteredProfiles(profiles.filter(p => (p as any).user_id === searchUserId || p.profile_code === u.username));
+    setAppliedUserId(searchUserId);
+    loadProfiles(1, searchUserId);
+  };
+
+  const handleClearSearch = () => {
+    setSearchUserId('');
+    setAppliedUserId('');
+    loadProfiles(1, '');
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.company_name) { toast.error('Agent Name is required'); return; }
+    if (!editingId && selectedLocationCodes.length === 0) { toast.error('Select at least one location'); return; }
     setSaving(true);
     try {
       if (editingId) {
+        // Edit: single profile, location_code stays as-is (already set in form)
         await api.put(`/profiles/${editingId}`, form);
         toast.success('Profile updated');
       } else {
-        await api.post('/profiles', form);
-        toast.success('Profile created');
+        // Batch create: one profile per selected location, server skips duplicates
+        const batchRes = await api.post('/profiles/batch', {
+          ...form,
+          location_codes: selectedLocationCodes,
+        });
+        const { created, skipped } = batchRes.data;
+        toast.success(`${created} profile(s) created${skipped > 0 ? `, ${skipped} already existed (skipped)` : ''}`);
       }
       setForm({ ...EMPTY_PROFILE_FORM });
       setEditingId(null);
-      loadProfiles();
+      setSelectedLocationCodes([]);
+      setAvailableLocations(allLocations);
+      loadProfiles(profilePage, appliedUserId);
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed');
     } finally { setSaving(false); }
@@ -407,7 +472,6 @@ export const RegisterProfilePage: React.FC = () => {
       user_prefix: p.user_prefix || '',
       consol_agent_id: p.consol_agent_id || '',
       user_email: p.user_email || '',
-      agent_name: (p as any).agent_name || '',
       address1: p.address1 || '',
       address2: p.address2 || '',
       gstin: p.gstin || '',
@@ -420,12 +484,13 @@ export const RegisterProfilePage: React.FC = () => {
       sea_consol_fcl_rate: String(p.sea_consol_fcl_rate || ''),
       air_manifest_rate: String(p.air_manifest_rate || ''),
       air_manifest_min_bill: String(p.air_manifest_min_bill || ''),
-      location_code: p.location_code || '',
       profile_code: p.profile_code || '',
       company_name: p.company_name || '',
       carn_number: p.carn_number || '',
       customs_house_code: p.customs_house_code || '',
     });
+    // Load locations for this user
+    if ((p as any).user_id) handleUserChange((p as any).user_id);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -434,175 +499,265 @@ export const RegisterProfilePage: React.FC = () => {
     try {
       await api.delete(`/profiles/${id}`);
       toast.success('Profile deleted');
-      loadProfiles();
+      loadProfiles(profilePage, appliedUserId);
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Delete failed');
     }
   };
 
   const f = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
-
   const GST_RATES = ['0', '5', '12', '18', '28'];
+
+  // Location label from allLocations list
+  const getLocLabel = (code: string) => {
+    const l = allLocations.find((x: any) => x.customs_house_code === code || x.iata_code === code);
+    return l ? l.city_name : code;
+  };
 
   return (
     <div className="page-container">
       <h1 className="page-title">Add New Profile</h1>
       <div style={{ display: 'grid', gridTemplateColumns: '560px 1fr', gap: 20, alignItems: 'start' }}>
-        <div className="card">
-          <div className="card-header"><span className="card-title">New Company Profile</span></div>
-          <div className="card-body">
-            <form onSubmit={handleSave}>
-              {/* Row 1: User + Location */}
-              <div className="form-row form-row-2">
+
+        {/* LEFT: Form */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div className="card">
+            <div className="card-header"><span className="card-title">{editingId ? 'Edit Profile' : 'New Company Profile'}</span></div>
+            <div className="card-body">
+              <form onSubmit={handleSave}>
+                {/* User */}
                 <div className="form-group">
-                  <label className="form-label">User</label>
-                  <select className="form-control" value={form.user_id} onChange={e => f('user_id', e.target.value)}>
+                  <label className="form-label">User <span className="required">*</span></label>
+                  <select className="form-control" value={form.user_id} onChange={e => handleUserChange(e.target.value)}>
                     <option value="">Select User...</option>
                     {users.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
                   </select>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Location</label>
-                  <select className="form-control" value={form.location_code} onChange={e => f('location_code', e.target.value)}>
-                    <option value="">Select Location...</option>
-                    {ACC_LOC_LIST.map(l => <option key={l.code} value={l.code}>{l.code} — {l.label}</option>)}
-                  </select>
-                </div>
-              </div>
 
-              {/* Row 2: ICEGATE ID + Pan No */}
-              <div className="form-row form-row-2">
-                <div className="form-group">
-                  <label className="form-label">ICEGATE ID</label>
-                  <input className="form-control font-mono" value={form.icegate_code} onChange={e => f('icegate_code', e.target.value.toUpperCase())} placeholder="ICEGATE ID" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Pan No.</label>
-                  <input className="form-control font-mono" value={form.pan_number} onChange={e => f('pan_number', e.target.value.toUpperCase())} placeholder="e.g. AAACE3803E" maxLength={10} />
-                </div>
-              </div>
-
-              {/* Row 3: User Prefix + Control NO */}
-              <div className="form-row form-row-2">
-                <div className="form-group">
-                  <label className="form-label">User Prefix</label>
-                  <input className="form-control font-mono" value={form.user_prefix} onChange={e => f('user_prefix', e.target.value.toUpperCase())} placeholder="ENTER CONTROL NO." maxLength={10} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Control NO. (CONSOL AGENT ID)</label>
-                  <input className="form-control font-mono" value={form.consol_agent_id} onChange={e => f('consol_agent_id', e.target.value.toUpperCase())} placeholder="ENTER CONSOL AGENT ID" />
-                </div>
-              </div>
-
-              {/* Row 4: User Email */}
-              <div className="form-group">
-                <label className="form-label">User Email</label>
-                <input className="form-control" type="email" value={form.user_email} onChange={e => f('user_email', e.target.value)} placeholder="email@example.com" />
-              </div>
-
-              {/* Row 5: Agent Name */}
-              <div className="form-group">
-                <label className="form-label">Agent Name <span className="required">*</span></label>
-                <input className="form-control" value={form.company_name} onChange={e => f('company_name', e.target.value)} placeholder="Company / Agent Name" />
-              </div>
-
-              {/* Row 6: Address1 + Address2 */}
-              <div className="form-row form-row-2">
-                <div className="form-group">
-                  <label className="form-label">Address1</label>
-                  <textarea className="form-control" value={form.address1} onChange={e => f('address1', e.target.value)} rows={2} placeholder="Address Line 1" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Address2</label>
-                  <textarea className="form-control" value={form.address2} onChange={e => f('address2', e.target.value)} rows={2} placeholder="Address Line 2" />
-                </div>
-              </div>
-
-              {/* Row 7: GSTIN + Billing Company */}
-              <div className="form-row form-row-2">
-                <div className="form-group">
-                  <label className="form-label">GSTIN</label>
-                  <input className="form-control font-mono" value={form.gstin} onChange={e => f('gstin', e.target.value.toUpperCase())} placeholder="GST Number" maxLength={15} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Billing Company</label>
-                  <input className="form-control" value={form.billing_company} onChange={e => f('billing_company', e.target.value)} placeholder="Billing Company Name" />
-                </div>
-              </div>
-
-              {/* Row 8: Billing State + GST + Pan For Invoice */}
-              <div className="form-row form-row-2">
-                <div className="form-group">
-                  <label className="form-label">Billing State</label>
-                  <input className="form-control" value={form.billing_state} onChange={e => f('billing_state', e.target.value)} placeholder="State" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">GST (%)</label>
-                  <select className="form-control" value={form.gst_rate} onChange={e => f('gst_rate', e.target.value)}>
-                    <option value="">Select GST...</option>
-                    {GST_RATES.map(r => <option key={r} value={r}>{r}%</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Pan For Invoice</label>
-                <input className="form-control font-mono" value={form.pan_for_invoice} onChange={e => f('pan_for_invoice', e.target.value.toUpperCase())} placeholder="PAN for Invoice" maxLength={10} />
-              </div>
-
-              {/* Rates section */}
-              <div style={{ borderTop: '1px solid var(--border)', marginBottom: 12, paddingTop: 12 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Rate Configuration</div>
-                <div className="form-row form-row-2">
+                {/* Location multi-select (only for create; edit shows single location) */}
+                {!editingId ? (
                   <div className="form-group">
-                    <label className="form-label">Air IGM Rate</label>
-                    <input className="form-control" type="number" step="0.01" value={form.air_igm_rate} onChange={e => f('air_igm_rate', e.target.value)} placeholder="0.00" />
+                    <label className="form-label">Locations <span className="required">*</span></label>
+                    <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                      <button type="button" className="btn btn-secondary btn-sm"
+                        onClick={() => setSelectedLocationCodes(availableLocations.map((l: any) => l.customs_house_code || l.iata_code))}>
+                        Select All
+                      </button>
+                      <button type="button" className="btn btn-secondary btn-sm"
+                        onClick={() => setSelectedLocationCodes([])}>
+                        Clear
+                      </button>
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)', alignSelf: 'center' }}>
+                        {selectedLocationCodes.length} selected
+                      </span>
+                    </div>
+                    <div style={{ maxHeight: 180, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px' }}>
+                      {availableLocations.length === 0 && (
+                        <div className="text-muted text-sm" style={{ padding: '8px 0' }}>
+                          {form.user_id ? 'No locations found — assign locations to user first' : 'Select a user to see available locations'}
+                        </div>
+                      )}
+                      {availableLocations.map((l: any) => {
+                        const code = l.customs_house_code || l.iata_code;
+                        return (
+                          <label key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 2px', cursor: 'pointer' }}>
+                            <input type="checkbox" checked={selectedLocationCodes.includes(code)}
+                              onChange={() => toggleSelectLocation(code)} style={{ width: 14, height: 14 }} />
+                            <span className="font-mono" style={{ fontWeight: 600, fontSize: 13, width: 70 }}>{code}</span>
+                            <span style={{ fontSize: 13 }}>{l.city_name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
+                ) : (
                   <div className="form-group">
-                    <label className="form-label">Sea Consol LCL Rate</label>
-                    <input className="form-control" type="number" step="0.01" value={form.sea_consol_lcl_rate} onChange={e => f('sea_consol_lcl_rate', e.target.value)} placeholder="0.00" />
+                    <label className="form-label">Location</label>
+                    <input className="form-control font-mono" value={form.customs_house_code} readOnly
+                      style={{ background: 'var(--bg-secondary)', color: 'var(--text-muted)' }} />
                   </div>
-                </div>
-                <div className="form-row form-row-2">
-                  <div className="form-group">
-                    <label className="form-label">Sea Consol FCL Rate</label>
-                    <input className="form-control" type="number" step="0.01" value={form.sea_consol_fcl_rate} onChange={e => f('sea_consol_fcl_rate', e.target.value)} placeholder="0.00" />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Air Manifest Rate</label>
-                    <input className="form-control" type="number" step="0.01" value={form.air_manifest_rate} onChange={e => f('air_manifest_rate', e.target.value)} placeholder="0.00" />
-                  </div>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Air Manifest Minimum Bill</label>
-                  <input className="form-control" type="number" step="0.01" value={form.air_manifest_min_bill} onChange={e => f('air_manifest_min_bill', e.target.value)} placeholder="0.00" />
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={saving}>
-                  {saving ? 'Saving...' : editingId ? 'Update Profile' : 'Save'}
-                </button>
-                {editingId && (
-                  <button type="button" className="btn btn-secondary" onClick={() => { setEditingId(null); setForm({ ...EMPTY_PROFILE_FORM }); }}>
-                    Cancel
-                  </button>
                 )}
-              </div>
-            </form>
+
+                {/* ICEGATE + PAN */}
+                <div className="form-row form-row-2">
+                  <div className="form-group">
+                    <label className="form-label">ICEGATE ID</label>
+                    <input className="form-control font-mono" value={form.icegate_code} onChange={e => f('icegate_code', e.target.value.toUpperCase())} placeholder="ICEGATE ID" />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Pan No.</label>
+                    <input className="form-control font-mono" value={form.pan_number} onChange={e => f('pan_number', e.target.value.toUpperCase())} placeholder="e.g. AAACE3803E" maxLength={10} />
+                  </div>
+                </div>
+
+                {/* User Prefix + Consol Agent ID */}
+                <div className="form-row form-row-2">
+                  <div className="form-group">
+                    <label className="form-label">User Prefix</label>
+                    <input className="form-control font-mono" value={form.user_prefix} onChange={e => f('user_prefix', e.target.value.toUpperCase())} placeholder="ENTER CONTROL NO." maxLength={10} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Control NO. (CONSOL AGENT ID)</label>
+                    <input className="form-control font-mono" value={form.consol_agent_id} onChange={e => f('consol_agent_id', e.target.value.toUpperCase())} placeholder="ENTER CONSOL AGENT ID" />
+                  </div>
+                </div>
+
+                {/* User Email */}
+                <div className="form-group">
+                  <label className="form-label">User Email</label>
+                  <input className="form-control" type="email" value={form.user_email} onChange={e => f('user_email', e.target.value)} placeholder="email@example.com" />
+                </div>
+
+                {/* Agent Name */}
+                <div className="form-group">
+                  <label className="form-label">Agent Name <span className="required">*</span></label>
+                  <input className="form-control" value={form.company_name} onChange={e => f('company_name', e.target.value)} placeholder="Company / Agent Name" />
+                </div>
+
+                {/* Address */}
+                <div className="form-row form-row-2">
+                  <div className="form-group">
+                    <label className="form-label">Address1</label>
+                    <textarea className="form-control" value={form.address1} onChange={e => f('address1', e.target.value)} rows={2} placeholder="Address Line 1" />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Address2</label>
+                    <textarea className="form-control" value={form.address2} onChange={e => f('address2', e.target.value)} rows={2} placeholder="Address Line 2" />
+                  </div>
+                </div>
+
+                {/* GSTIN + Billing Company */}
+                <div className="form-row form-row-2">
+                  <div className="form-group">
+                    <label className="form-label">GSTIN</label>
+                    <input className="form-control font-mono" value={form.gstin} onChange={e => f('gstin', e.target.value.toUpperCase())} placeholder="GST Number" maxLength={15} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Billing Company</label>
+                    <input className="form-control" value={form.billing_company} onChange={e => f('billing_company', e.target.value)} placeholder="Billing Company Name" />
+                  </div>
+                </div>
+
+                {/* Billing State + GST */}
+                <div className="form-row form-row-2">
+                  <div className="form-group">
+                    <label className="form-label">Billing State</label>
+                    <input className="form-control" value={form.billing_state} onChange={e => f('billing_state', e.target.value)} placeholder="State" />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">GST (%)</label>
+                    <select className="form-control" value={form.gst_rate} onChange={e => f('gst_rate', e.target.value)}>
+                      <option value="">Select GST...</option>
+                      {GST_RATES.map(r => <option key={r} value={r}>{r}%</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Pan For Invoice</label>
+                  <input className="form-control font-mono" value={form.pan_for_invoice} onChange={e => f('pan_for_invoice', e.target.value.toUpperCase())} placeholder="PAN for Invoice" maxLength={10} />
+                </div>
+
+                {/* Rates */}
+                <div style={{ borderTop: '1px solid var(--border)', marginBottom: 12, paddingTop: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Rate Configuration</div>
+                  <div className="form-row form-row-2">
+                    <div className="form-group">
+                      <label className="form-label">Air IGM Rate</label>
+                      <input className="form-control" type="number" step="0.01" value={form.air_igm_rate} onChange={e => f('air_igm_rate', e.target.value)} placeholder="0.00" />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Sea Consol LCL Rate</label>
+                      <input className="form-control" type="number" step="0.01" value={form.sea_consol_lcl_rate} onChange={e => f('sea_consol_lcl_rate', e.target.value)} placeholder="0.00" />
+                    </div>
+                  </div>
+                  <div className="form-row form-row-2">
+                    <div className="form-group">
+                      <label className="form-label">Sea Consol FCL Rate</label>
+                      <input className="form-control" type="number" step="0.01" value={form.sea_consol_fcl_rate} onChange={e => f('sea_consol_fcl_rate', e.target.value)} placeholder="0.00" />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Air Manifest Rate</label>
+                      <input className="form-control" type="number" step="0.01" value={form.air_manifest_rate} onChange={e => f('air_manifest_rate', e.target.value)} placeholder="0.00" />
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Air Manifest Minimum Bill</label>
+                    <input className="form-control" type="number" step="0.01" value={form.air_manifest_min_bill} onChange={e => f('air_manifest_min_bill', e.target.value)} placeholder="0.00" />
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={saving}>
+                    {saving ? 'Saving...' : editingId ? 'Update Profile' : `Save${selectedLocationCodes.length > 1 ? ` (${selectedLocationCodes.length} locations)` : ''}`}
+                  </button>
+                  {editingId && (
+                    <button type="button" className="btn btn-secondary" onClick={() => {
+                      setEditingId(null); setForm({ ...EMPTY_PROFILE_FORM });
+                      setSelectedLocationCodes([]); setAvailableLocations(allLocations);
+                    }}>Cancel</button>
+                  )}
+                </div>
+              </form>
+            </div>
           </div>
+
+          {/* User Location Access Management */}
+          {/* <div className="card">
+            <div className="card-header"><span className="card-title">Manage User Location Access</span></div>
+            <div className="card-body">
+              <div className="form-group">
+                <label className="form-label">Select User</label>
+                <select className="form-control" value={locAccessUserId} onChange={e => handleLoadAccess(e.target.value)}>
+                  <option value="">Select User...</option>
+                  {users.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
+                </select>
+              </div>
+              {locAccessUserId && (
+                <>
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                    <button type="button" className="btn btn-secondary btn-sm"
+                      onClick={() => setLocAccessIds(new Set(allLocations.map((l: any) => l.id)))}>
+                      Select All
+                    </button>
+                    <button type="button" className="btn btn-secondary btn-sm"
+                      onClick={() => setLocAccessIds(new Set())}>
+                      Clear All (allow all)
+                    </button>
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)', alignSelf: 'center' }}>
+                      {locAccessIds.size === 0 ? 'No restrictions — can access all' : `${locAccessIds.size} location(s) assigned`}
+                    </span>
+                  </div>
+                  <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px', marginBottom: 10 }}>
+                    {allLocations.map((loc: any) => (
+                      <label key={loc.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 2px', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={locAccessIds.has(loc.id)}
+                          onChange={() => toggleLocAccess(loc.id)} style={{ width: 14, height: 14 }} />
+                        <span className="font-mono" style={{ fontWeight: 600, fontSize: 13, width: 70 }}>{loc.customs_house_code || loc.iata_code}</span>
+                        <span style={{ fontSize: 13 }}>{loc.city_name}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <button className="btn btn-primary" style={{ width: '100%' }} onClick={saveLocAccess} disabled={savingAccess}>
+                    {savingAccess ? 'Saving...' : `Save Access for ${locAccessUserName}`}
+                  </button>
+                </>
+              )}
+            </div>
+          </div> */}
         </div>
 
+        {/* RIGHT: Profiles Table */}
         <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
           <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <span className="card-title" style={{ marginRight: 'auto' }}>Profiles ({filteredProfiles.length})</span>
+            <span className="card-title" style={{ marginRight: 'auto' }}>Profiles ({profileTotal})</span>
             <label className="form-label" style={{ margin: 0 }}>Find by User:</label>
             <select className="form-control" style={{ width: 180 }} value={searchUserId} onChange={e => setSearchUserId(e.target.value)}>
               <option value="">Select User Name</option>
               {users.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
             </select>
             <button className="btn btn-primary btn-sm" onClick={handleSearch}>Search</button>
-            <button className="btn btn-secondary btn-sm" onClick={() => { setSearchUserId(''); setFilteredProfiles(profiles); }}>Clear</button>
+            <button className="btn btn-secondary btn-sm" onClick={handleClearSearch}>Clear</button>
           </div>
           <div className="table-wrapper">
             <table>
@@ -619,31 +774,64 @@ export const RegisterProfilePage: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredProfiles.length === 0 && (
+                {profiles.length === 0 && (
                   <tr><td colSpan={8} className="text-center text-muted" style={{ padding: '32px 0' }}>No profiles yet</td></tr>
                 )}
-                {filteredProfiles.map(p => {
-                  const locLabel = ACC_LOC_LIST.find(l => l.code === p.location_code)?.label || p.location_code || '—';
-                  return (
-                    <tr key={p.id}>
-                      <td style={{ fontWeight: 500 }}>{p.company_name}</td>
-                      <td className="text-sm">{locLabel}</td>
-                      <td className="text-sm">{p.user_email || '—'}</td>
-                      <td className="font-mono text-sm">{p.consol_agent_id || '—'}</td>
-                      <td className="font-mono text-sm">{p.customs_house_code || p.location_code || '—'}</td>
-                      <td className="font-mono text-sm">{p.user_prefix || '—'}</td>
-                      <td className="font-mono text-sm">{p.pan_number || '—'}</td>
-                      <td style={{ whiteSpace: 'nowrap' }}>
-                        <button className="btn-link" onClick={() => handleEdit(p)}>EDIT</button>
-                        <span style={{ color: 'var(--border)', margin: '0 4px' }}>|</span>
-                        <button className="btn-link danger" onClick={() => handleDelete(p.id)}>Delete</button>
-                      </td>
-                    </tr>
-                  );
-                })}
+                {profiles.map(p => (
+                  <tr key={p.id}>
+                    <td style={{ fontWeight: 500 }}>{p.company_name}</td>
+                    <td className="text-sm">{getLocLabel(p.location_code || p.customs_house_code || '')} <span className="font-mono text-muted" style={{ fontSize: 11 }}>{p.location_code || p.customs_house_code || '—'}</span></td>
+                    <td className="text-sm">{p.user_email || '—'}</td>
+                    <td className="font-mono text-sm">{p.icegate_code || '—'}</td>
+                    <td className="font-mono text-sm">{p.customs_house_code || p.location_code || '—'}</td>
+                    <td className="font-mono text-sm">{
+                      (() => {
+                        const key = `${(p as any).user_id}_${p.location_code || p.customs_house_code}`;
+                        const n = controlNumbers[key];
+                        return n != null ? String(n).padStart(3, '0') : '—';
+                      })()
+                    }</td>
+                    <td className="font-mono text-sm">{p.pan_number || '—'}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <button className="btn-link" onClick={() => handleEdit(p)}>EDIT</button>
+                      <span style={{ color: 'var(--border)', margin: '0 4px' }}>|</span>
+                      <button className="btn-link danger" onClick={() => handleDelete(p.id)}>Delete</button>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
+          {/* Pagination */}
+          {profileTotal > PROFILE_PAGE_SIZE && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', borderTop: '1px solid var(--border)', fontSize: 13 }}>
+              <span className="text-muted">
+                Showing {((profilePage - 1) * PROFILE_PAGE_SIZE) + 1}–{Math.min(profilePage * PROFILE_PAGE_SIZE, profileTotal)} of {profileTotal}
+              </span>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <button className="btn btn-secondary btn-sm" disabled={profilePage <= 1}
+                  onClick={() => { const p = profilePage - 1; loadProfiles(p, appliedUserId); }}>
+                  ← Prev
+                </button>
+                {Array.from({ length: Math.ceil(profileTotal / PROFILE_PAGE_SIZE) }, (_, i) => i + 1)
+                  .filter(n => n === 1 || n === Math.ceil(profileTotal / PROFILE_PAGE_SIZE) || Math.abs(n - profilePage) <= 1)
+                  .reduce((acc: (number | string)[], n, i, arr) => {
+                    if (i > 0 && n - (arr[i - 1] as number) > 1) acc.push('...');
+                    acc.push(n); return acc;
+                  }, [])
+                  .map((n, i) => n === '...'
+                    ? <span key={`e${i}`} style={{ padding: '0 6px', alignSelf: 'center' }}>…</span>
+                    : <button key={n} className={`btn btn-sm ${profilePage === n ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => loadProfiles(n as number, appliedUserId)}
+                        style={{ minWidth: 32 }}>{n}</button>
+                  )}
+                <button className="btn btn-secondary btn-sm" disabled={profilePage >= Math.ceil(profileTotal / PROFILE_PAGE_SIZE)}
+                  onClick={() => { const p = profilePage + 1; loadProfiles(p, appliedUserId); }}>
+                  Next →
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

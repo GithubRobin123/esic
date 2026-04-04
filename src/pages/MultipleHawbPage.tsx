@@ -4,6 +4,7 @@ import api from '../utils/api';
 import { Mawb } from '../types';
 import toast from 'react-hot-toast';
 import { fmtDateTime } from '../utils/dateUtils';
+import { useAuth } from '../hooks/useAuth';
 
 interface HawbRow {
   id?: string;          // present for existing HAWBs
@@ -18,6 +19,7 @@ interface HawbRow {
 
 const MultipleHawbPage: React.FC = () => {
   const navigate = useNavigate();
+  const { selectedLocation } = useAuth();
   const [mawbs, setMawbs] = useState<Mawb[]>([]);
   const [selectedMawbId, setSelectedMawbId] = useState('');
   const [numHawbs, setNumHawbs] = useState('1');
@@ -28,8 +30,13 @@ const MultipleHawbPage: React.FC = () => {
   const [checklistData, setChecklistData] = useState<any[]>([]);
 
   useEffect(() => {
-    api.get('/mawbs', { params: { pageSize: 1000 } }).then(r => setMawbs(r.data.data ?? [])).catch(() => {});
-  }, []);
+    api.get('/mawbs', {
+      params: {
+        pageSize: 1000,
+        ...(selectedLocation?.customs_house_code ? { customs_house_code: selectedLocation.customs_house_code } : {}),
+      }
+    }).then(r => setMawbs(r.data.data ?? [])).catch(() => {});
+  }, [selectedLocation?.customs_house_code]); // eslint-disable-line
 
   const selectedMawb = mawbs.find(m => m.id === selectedMawbId);
 
@@ -399,7 +406,7 @@ const MultipleHawbPage: React.FC = () => {
                           <th style={thStyle}>Weight</th>
                           <th style={thStyle}>Item Desc</th>
                           <th style={thStyle}>Msg Type</th>
-                          <th style={thStyle}>Transmission Date</th>
+                          {/* <th style={thStyle}>Transmission Date</th> */}
                         </tr>
                       </thead>
                       <tbody>
@@ -411,7 +418,7 @@ const MultipleHawbPage: React.FC = () => {
                           <td style={tdStyle}>{parseFloat(String(mawb.gross_weight)).toFixed(2)}</td>
                           <td style={tdStyle}>CONSOL</td>
                           <td style={tdStyle}>{mawb.message_type || 'F'}</td>
-                          <td style={{ ...tdStyle, fontSize: 11 }}>{fmtDateTime(mawb.transmission_date)}</td>
+                          {/* <td style={{ ...tdStyle, fontSize: 11 }}>{fmtDateTime(mawb.transmission_date)}</td> */}
                         </tr>
                       </tbody>
                     </table>
@@ -421,7 +428,6 @@ const MultipleHawbPage: React.FC = () => {
                       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                         <thead>
                           <tr style={{ background: '#e2e8f0' }}>
-                            <th style={thStyle}>#</th>
                             <th style={thStyle}>House AWB</th>
                             <th style={thStyle}>Port Of Origin</th>
                             <th style={thStyle}>Port Of Dest</th>
@@ -434,7 +440,6 @@ const MultipleHawbPage: React.FC = () => {
                         <tbody>
                           {mawb.hawbs.map((h: any, i: number) => (
                             <tr key={h.id}>
-                              <td style={{ ...tdStyle, color: 'var(--text-muted)', fontSize: 11 }}>{i + 1}</td>
                               <td style={tdStyle}>{h.hawb_no}</td>
                               <td style={tdStyle}>{h.origin}</td>
                               <td style={tdStyle}>{h.destination}</td>
@@ -446,7 +451,7 @@ const MultipleHawbPage: React.FC = () => {
                           ))}
                           <tr style={{ fontWeight: 700, background: '#f1f5f9' }}>
                             <td style={tdStyle} colSpan={2}>Hawb Count: {mawb.hawbs.length}</td>
-                            <td style={tdStyle} colSpan={2}>Total:</td>
+                            <td style={tdStyle} >Total:</td>
                             <td style={tdStyle}>{mawb.hawbs.reduce((s: number, h: any) => s + Number(h.total_packages), 0)}</td>
                             <td style={tdStyle}>{mawb.hawbs.reduce((s: number, h: any) => s + parseFloat(h.gross_weight), 0).toFixed(2)}</td>
                             <td style={tdStyle} colSpan={2}></td>

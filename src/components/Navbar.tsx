@@ -132,7 +132,7 @@ export const Navbar: React.FC = () => {
         <span className="nav-user">
           {user?.username?.toUpperCase()}
           {selectedLocation
-            ? ` — ${selectedLocation.iata_code} (${selectedLocation.customs_house_code || selectedLocation.iata_code})`
+            ? ` — ${selectedLocation.city_name || selectedLocation.iata_code}`
             : ` (${user?.customs_house_code || 'N/A'})`
           }
         </span>
