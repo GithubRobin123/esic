@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../utils/api';
 import { Mawb, CgmPreview, Transmission } from '../types';
@@ -16,6 +16,11 @@ const TransmissionPage: React.FC = () => {
   const [history, setHistory] = useState<Transmission[]>([]);
   const [activeTab, setActiveTab] = useState<'generate' | 'history'>('generate');
 
+  // MAWB search
+  const [mawbSearch, setMawbSearch] = useState('');
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     api.get('/mawbs', { params: { pageSize: 1000 } }).then(r => setMawbs(r.data.data ?? [])).catch(() => {});
     api.get('/transmissions/history').then(r => setHistory(r.data)).catch(() => {});
@@ -24,6 +29,24 @@ const TransmissionPage: React.FC = () => {
   useEffect(() => {
     if (defaultMawbId) handlePreview(defaultMawbId);
   }, []); // eslint-disable-line
+
+  // Debounced MAWB search — fetches from API when user types
+  const handleMawbSearchChange = (val: string) => {
+    setMawbSearch(val);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (!val.trim()) {
+      // Reload default 1000
+      api.get('/mawbs', { params: { pageSize: 1000 } }).then(r => setMawbs(r.data.data ?? [])).catch(() => {});
+      return;
+    }
+    searchTimer.current = setTimeout(async () => {
+      setSearchLoading(true);
+      try {
+        const res = await api.get('/mawbs', { params: { pageSize: 50, search: val.trim() } });
+        setMawbs(res.data.data ?? []);
+      } catch { /* ignore */ } finally { setSearchLoading(false); }
+    }, 400);
+  };
 
   const handlePreview = async (mawbId: string) => {
     if (!mawbId) { toast.error('Select a MAWB first'); return; }
@@ -39,13 +62,9 @@ const TransmissionPage: React.FC = () => {
   const handleDownload = async () => {
     if (!selectedMawbId) { toast.error('Select a MAWB first'); return; }
     try {
-      const res = await api.post(`/transmissions/generate-cgm/${selectedMawbId}`, {}, {
-        responseType: 'blob',
-      });
-      const contentDisposition = res.headers['content-disposition'] || '';
-      const fileNameMatch = contentDisposition.match(/filename="?(.+)"?/);
-      const fileName = fileNameMatch ? fileNameMatch[1] : 'manifest.cgm';
-      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const res = await api.post(`/transmissions/generate-cgm/${selectedMawbId}`, {});
+      const { fileName, fileContent } = res.data;
+      const url = window.URL.createObjectURL(new Blob([fileContent], { type: 'text/plain' }));
       const link = document.createElement('a');
       link.href = url;
       link.download = fileName;
@@ -55,7 +74,7 @@ const TransmissionPage: React.FC = () => {
       // Refresh history
       api.get('/transmissions/history').then(r => setHistory(r.data)).catch(() => {});
     } catch (err: any) {
-      toast.error('Download failed');
+      toast.error(err.response?.data?.message || 'Download failed');
     }
   };
 
@@ -77,6 +96,20 @@ const TransmissionPage: React.FC = () => {
             <div className="card-body">
               <div className="alert alert-info">
                 ℹ️ Select a MAWB to generate the ICES 1.5 compliant <strong>Consol General Manifest (CGM)</strong> file (CMCHI01) for submission to ICEGATE.
+              </div>
+              {/* MAWB Search */}
+              <div className="form-group" style={{ marginBottom: 10 }}>
+                <label className="form-label">Search MAWB by number</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    className="form-control"
+                    style={{ maxWidth: 280 }}
+                    placeholder="Type MAWB number to search..."
+                    value={mawbSearch}
+                    onChange={e => handleMawbSearchChange(e.target.value)}
+                  />
+                  {searchLoading && <span className="spinner" style={{ width: 16, height: 16, alignSelf: 'center' }}></span>}
+                </div>
               </div>
               <div className="form-row form-row-2" style={{ alignItems: 'flex-end' }}>
                 <div className="form-group" style={{ margin: 0 }}>
@@ -173,6 +206,7 @@ const TransmissionPage: React.FC = () => {
                     <th>Sent By</th>
                     <th>Sent At</th>
                     <th>Status</th>
+                    <th>Download</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -185,8 +219,26 @@ const TransmissionPage: React.FC = () => {
                       <td className="text-muted text-sm">{fmtDateTime(t.sent_at)}</td>
                       <td>
                         <span className={`badge ${t.status === 'sent' || t.status === 'transmitted' ? 'badge-success' : t.status === 'error' ? 'badge-danger' : 'badge-gray'}`}>
-                          {t.status}
+                          {t.status || 'pending'}
                         </span>
+                      </td>
+                      <td>
+                        <button
+                          className="btn-link"
+                          onClick={async () => {
+                            try {
+                              const res = await api.get(`/transmissions/download/${t.id}`, { responseType: 'blob' });
+                              const url = window.URL.createObjectURL(new Blob([res.data]));
+                              const link = document.createElement('a');
+                              link.href = url;
+                              link.download = t.file_name;
+                              link.click();
+                              window.URL.revokeObjectURL(url);
+                            } catch { toast.error('Download failed'); }
+                          }}
+                        >
+                          ↓ {t.file_name}
+                        </button>
                       </td>
                     </tr>
                   ))}

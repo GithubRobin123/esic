@@ -14,7 +14,7 @@ import TransmissionPage from './pages/TransmissionPage';
 import LocationPage from './pages/LocationPage';
 import CanDoPage from './pages/CanDoPage';
 import AccountingPage from './pages/AccountingPage';
-import { ChecklistPage, AccountStatementPage } from './pages/ReportPages';
+import { ChecklistPage, ConsolStatementPage } from './pages/ReportPages';
 import {
   RegisterUserPage, RegisterProfilePage, ChangePasswordPage,
   StatementConsolPage, StatementHawbPage, DownloadFilePage, ChangeInvoicePage,
@@ -68,7 +68,8 @@ const AppRoutes: React.FC = () => {
 
         {/* Reports */}
         <Route path="/report/checklist" element={<ProtectedRoute><ChecklistPage /></ProtectedRoute>} />
-        <Route path="/report/account-statement" element={<ProtectedRoute><AccountStatementPage /></ProtectedRoute>} />
+        <Route path="/report/consol-statement" element={<ProtectedRoute><ConsolStatementPage /></ProtectedRoute>} />
+        <Route path="/report/account-statement" element={<ProtectedRoute><ConsolStatementPage /></ProtectedRoute>} />
 
         {/* Transmission */}
         <Route path="/transmission/generate" element={<ProtectedRoute><TransmissionPage /></ProtectedRoute>} />

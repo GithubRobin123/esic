@@ -12,14 +12,13 @@ const NAV_ITEMS: NavItem[] = [
     items: [
       { label: 'Add House AWB', path: '/hawb/new' },
       { label: 'Add Multiple Hawbs', path: '/hawb/add-multiple' },
-      { label: 'View All HAWBs', path: '/hawb' },
     ],
   },
   {
     label: 'Report',
     items: [
       { label: 'CheckList', path: '/report/checklist' },
-      { label: 'Account Statement', path: '/report/account-statement' },
+      { label: 'Statement by Consol', path: '/report/consol-statement' },
     ],
   },
   {

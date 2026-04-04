@@ -26,6 +26,45 @@ export const RegisterUserPage: React.FC = () => {
     return next;
   });
 
+  // Location access modal state
+  const [locationTarget, setLocationTarget] = useState<{ id: string; username: string } | null>(null);
+  const [allLocations, setAllLocations] = useState<any[]>([]);
+  const [userLocationIds, setUserLocationIds] = useState<Set<string>>(new Set());
+  const [savingLocations, setSavingLocations] = useState(false);
+
+  const openLocationModal = async (u: { id: string; username: string }) => {
+    setLocationTarget(u);
+    try {
+      const [allRes, userRes] = await Promise.all([
+        api.get('/locations'),
+        api.get(`/locations/user/${u.id}`),
+      ]);
+      setAllLocations(allRes.data);
+      setUserLocationIds(new Set((userRes.data as any[]).map((l: any) => l.id)));
+    } catch { toast.error('Failed to load locations'); }
+  };
+
+  const toggleLocationAccess = (locId: string) => {
+    setUserLocationIds(prev => {
+      const next = new Set(prev);
+      next.has(locId) ? next.delete(locId) : next.add(locId);
+      return next;
+    });
+  };
+
+  const saveLocationAccess = async () => {
+    if (!locationTarget) return;
+    setSavingLocations(true);
+    try {
+      await api.put(`/locations/user/${locationTarget.id}`, { locationIds: Array.from(userLocationIds) });
+      toast.success(userLocationIds.size === 0
+        ? `All locations allowed for ${locationTarget.username}`
+        : `${userLocationIds.size} location(s) assigned to ${locationTarget.username}`);
+      setLocationTarget(null);
+    } catch { toast.error('Failed to save locations'); }
+    finally { setSavingLocations(false); }
+  };
+
   const loadUsers = () => api.get('/users').then(r => setUsers(r.data)).catch(() => {});
 
   useEffect(() => {
@@ -122,6 +161,7 @@ export const RegisterUserPage: React.FC = () => {
                   <th>Active</th>
                   <th>Created</th>
                   <th>Password</th>
+                  <th>Locations</th>
                 </tr>
               </thead>
               <tbody>
@@ -156,6 +196,15 @@ export const RegisterUserPage: React.FC = () => {
                           Set
                         </button>
                       </div>
+                    </td>
+                    <td>
+                      <button
+                        className="btn-link"
+                        style={{ fontSize: 11 }}
+                        onClick={() => openLocationModal({ id: u.id, username: u.username })}
+                      >
+                        Manage
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -200,6 +249,62 @@ export const RegisterUserPage: React.FC = () => {
               <button className="btn btn-secondary" onClick={() => setResetTarget(null)}>Cancel</button>
               <button className="btn btn-primary" onClick={handleResetPassword} disabled={resetting}>
                 {resetting ? 'Saving...' : 'Set Password'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Location Access Modal */}
+      {locationTarget && (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setLocationTarget(null); }}>
+          <div className="modal" style={{ maxWidth: 520 }}>
+            <div className="modal-header">
+              <span className="modal-title">Location Access — <span className="font-mono">{locationTarget.username}</span></span>
+              <button className="modal-close" onClick={() => setLocationTarget(null)}>×</button>
+            </div>
+            <div className="modal-body">
+              <p className="text-muted text-sm" style={{ marginBottom: 12 }}>
+                Select the locations this user can access. If <strong>none are selected</strong>, the user can access <strong>all</strong> locations.
+              </p>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                <button className="btn btn-secondary btn-sm" onClick={() => setUserLocationIds(new Set(allLocations.map((l: any) => l.id)))}>
+                  Select All
+                </button>
+                <button className="btn btn-secondary btn-sm" onClick={() => setUserLocationIds(new Set())}>
+                  Clear All (allow all)
+                </button>
+              </div>
+              <div style={{ maxHeight: 320, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 6, padding: 8 }}>
+                {allLocations.map((loc: any) => (
+                  <label key={loc.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 6px', cursor: 'pointer', borderRadius: 4, transition: 'background 0.1s' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = '#f1f5f9')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={userLocationIds.has(loc.id)}
+                      onChange={() => toggleLocationAccess(loc.id)}
+                      style={{ width: 15, height: 15 }}
+                    />
+                    <span className="font-mono" style={{ fontWeight: 600, width: 36 }}>{loc.iata_code}</span>
+                    <span style={{ fontSize: 13 }}>{loc.city_name}</span>
+                    {loc.customs_house_code && (
+                      <span className="badge badge-gray" style={{ fontSize: 10 }}>{loc.customs_house_code}</span>
+                    )}
+                  </label>
+                ))}
+              </div>
+              <p style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+                {userLocationIds.size === 0
+                  ? 'No restrictions — user can select any location.'
+                  : `${userLocationIds.size} location(s) assigned.`}
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setLocationTarget(null)}>Cancel</button>
+              <button className="btn btn-primary" onClick={saveLocationAccess} disabled={savingLocations}>
+                {savingLocations ? 'Saving...' : 'Save Access'}
               </button>
             </div>
           </div>

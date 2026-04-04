@@ -6,12 +6,14 @@ import toast from 'react-hot-toast';
 import { fmtDateTime } from '../utils/dateUtils';
 
 interface HawbRow {
+  id?: string;          // present for existing HAWBs
   hawb_no: string;
   origin: string;
   destination: string;
   total_packages: string;
   gross_weight: string;
   item_description: string;
+  isExisting?: boolean; // flag — already saved to DB
 }
 
 const MultipleHawbPage: React.FC = () => {
@@ -20,6 +22,7 @@ const MultipleHawbPage: React.FC = () => {
   const [selectedMawbId, setSelectedMawbId] = useState('');
   const [numHawbs, setNumHawbs] = useState('1');
   const [rows, setRows] = useState<HawbRow[]>([]);
+  const [existingCount, setExistingCount] = useState(0);
   const [saving, setSaving] = useState(false);
   const [showChecklist, setShowChecklist] = useState(false);
   const [checklistData, setChecklistData] = useState<any[]>([]);
@@ -30,19 +33,53 @@ const MultipleHawbPage: React.FC = () => {
 
   const selectedMawb = mawbs.find(m => m.id === selectedMawbId);
 
+  // When MAWB is selected, load existing HAWBs for it
+  const handleMawbSelect = async (mawbId: string) => {
+    setSelectedMawbId(mawbId);
+    setRows([]);
+    setExistingCount(0);
+    if (!mawbId) return;
+    try {
+      const res = await api.get('/hawbs', { params: { mawb_id: mawbId, pageSize: 100 } });
+      const existing: HawbRow[] = (res.data.data ?? []).map((h: any) => ({
+        id: h.id,
+        hawb_no: h.hawb_no,
+        origin: h.origin,
+        destination: h.destination,
+        total_packages: String(h.total_packages),
+        gross_weight: String(h.gross_weight),
+        item_description: h.item_description || '',
+        isExisting: true,
+      }));
+      setExistingCount(existing.length);
+      setRows(existing);
+      const minCount = Math.max(existing.length, 1);
+      setNumHawbs(String(minCount));
+    } catch {
+      toast.error('Failed to load existing HAWBs');
+    }
+  };
+
   const handleAddRows = () => {
     const count = parseInt(numHawbs) || 1;
+    if (count < existingCount) {
+      toast.error(`Cannot reduce below ${existingCount} (already added HAWBs)`);
+      return;
+    }
     const origin = selectedMawb?.origin || '';
     const destination = selectedMawb?.destination || '';
-    const newRows: HawbRow[] = Array.from({ length: count }, (_, i) => ({
-      hawb_no: rows[i]?.hawb_no || '',
-      origin,
-      destination,
-      total_packages: rows[i]?.total_packages || '',
-      gross_weight: rows[i]?.gross_weight || '',
-      item_description: rows[i]?.item_description || '',
-    }));
-    setRows(newRows);
+
+    setRows(prev => {
+      const newRows: HawbRow[] = Array.from({ length: count }, (_, i) => {
+        if (i < prev.length) return prev[i];
+        return {
+          hawb_no: '', origin, destination,
+          total_packages: '', gross_weight: '', item_description: '',
+          isExisting: false,
+        };
+      });
+      return newRows;
+    });
   };
 
   const updateRow = (idx: number, field: keyof HawbRow, value: string) => {
@@ -50,6 +87,10 @@ const MultipleHawbPage: React.FC = () => {
   };
 
   const deleteRow = (idx: number) => {
+    if (rows[idx]?.isExisting) {
+      toast.error('Cannot remove an already-saved HAWB from this view. Use the HAWB list to delete it.');
+      return;
+    }
     setRows(prev => prev.filter((_, i) => i !== idx));
   };
 
@@ -59,13 +100,45 @@ const MultipleHawbPage: React.FC = () => {
 
   const handleSave = async () => {
     if (!selectedMawbId) { toast.error('Please select a MAWB'); return; }
-    const validRows = rows.filter(r => r.hawb_no.trim());
-    if (validRows.length === 0) { toast.error('Add at least one HAWB number'); return; }
+
+    const existingRows = rows.filter(r => r.isExisting && r.id && r.hawb_no.trim());
+    const newRows = rows.filter(r => !r.isExisting && r.hawb_no.trim());
+
+    if (existingRows.length === 0 && newRows.length === 0) {
+      toast.error('No HAWBs to save');
+      return;
+    }
+
     setSaving(true);
     try {
-      await api.post('/hawbs/batch', { mawb_id: selectedMawbId, hawbs: validRows });
-      toast.success(`${validRows.length} HAWB(s) created`);
-      navigate(`/hawb?mawb_id=${selectedMawbId}&mawb_no=${selectedMawb?.mawb_no || ''}`);
+      // Update existing HAWBs
+      for (const row of existingRows) {
+        await api.put(`/hawbs/${row.id}`, {
+          mawb_id: selectedMawbId,
+          hawb_no: row.hawb_no,
+          origin: row.origin,
+          destination: row.destination,
+          total_packages: row.total_packages,
+          gross_weight: row.gross_weight,
+          item_description: row.item_description,
+        });
+      }
+
+      // Create new HAWBs
+      if (newRows.length > 0) {
+        await api.post('/hawbs/batch', { mawb_id: selectedMawbId, hawbs: newRows });
+      }
+
+      const updatedCount = existingRows.length;
+      const createdCount = newRows.length;
+      const parts = [];
+      if (updatedCount > 0) parts.push(`${updatedCount} updated`);
+      if (createdCount > 0) parts.push(`${createdCount} created`);
+      toast.success(`HAWBs saved: ${parts.join(', ')}`);
+
+      // Reload and show checklist
+      await handleMawbSelect(selectedMawbId);
+      handleChecklist();
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Save failed');
     } finally { setSaving(false); }
@@ -104,7 +177,8 @@ const MultipleHawbPage: React.FC = () => {
     win.print();
   };
 
-  const NUM_OPTIONS = Array.from({ length: 50 }, (_, i) => i + 1);
+  // Build dropdown options: minimum = existingCount, max = 50
+  const NUM_OPTIONS = Array.from({ length: 50 }, (_, i) => i + 1).filter(n => n >= existingCount);
 
   const thStyle: React.CSSProperties = { border: '1px solid #cbd5e1', padding: '5px 8px', background: '#e2e8f0', fontWeight: 700, fontSize: 12, whiteSpace: 'nowrap' };
   const tdStyle: React.CSSProperties = { border: '1px solid #cbd5e1', padding: '4px 8px', fontSize: 12 };
@@ -125,9 +199,8 @@ const MultipleHawbPage: React.FC = () => {
               Add Multiple Hawbs
             </span>
           </div>
-          <p className="page-subtitle">Add multiple house airway bills at once</p>
+          <p className="page-subtitle">Add or edit multiple house airway bills at once</p>
         </div>
-        <button className="btn btn-secondary btn-sm" onClick={() => navigate('/hawb')}>← View All HAWBs</button>
       </div>
 
       <div className="card">
@@ -140,7 +213,7 @@ const MultipleHawbPage: React.FC = () => {
                 className="form-control"
                 style={{ minWidth: 200 }}
                 value={selectedMawbId}
-                onChange={e => setSelectedMawbId(e.target.value)}
+                onChange={e => handleMawbSelect(e.target.value)}
               >
                 <option value="">Select MAWB...</option>
                 {mawbs.map(m => <option key={m.id} value={m.id}>{m.mawb_no}</option>)}
@@ -154,8 +227,15 @@ const MultipleHawbPage: React.FC = () => {
                 value={numHawbs}
                 onChange={e => setNumHawbs(e.target.value)}
               >
-                {NUM_OPTIONS.map(n => <option key={n} value={n}>{n}</option>)}
+                {NUM_OPTIONS.length === 0
+                  ? <option value="1">1</option>
+                  : NUM_OPTIONS.map(n => <option key={n} value={n}>{n}</option>)}
               </select>
+              {existingCount > 0 && (
+                <span className="text-muted text-sm">
+                  ({existingCount} already saved — editable)
+                </span>
+              )}
             </div>
             <button
               className="btn btn-primary"
@@ -172,6 +252,7 @@ const MultipleHawbPage: React.FC = () => {
               <table>
                 <thead>
                   <tr>
+                    <th>#</th>
                     <th>Hawb No</th>
                     <th>Port Of Origin</th>
                     <th>Port Of Destination</th>
@@ -183,14 +264,18 @@ const MultipleHawbPage: React.FC = () => {
                 </thead>
                 <tbody>
                   {rows.map((row, idx) => (
-                    <tr key={idx}>
+                    <tr key={idx} style={row.isExisting ? { background: '#f0fff4' } : {}}>
+                      <td style={{ ...tdStyle, width: 32, color: 'var(--text-muted)', fontSize: 11 }}>
+                        {idx + 1}
+                        {row.isExisting && <span title="Already saved — editing will update" style={{ marginLeft: 3, color: '#22c55e' }}>✓</span>}
+                      </td>
                       <td>
                         <input
                           className="form-control font-mono"
-                          style={{ minWidth: 120 }}
                           value={row.hawb_no}
                           onChange={e => updateRow(idx, 'hawb_no', e.target.value)}
                           placeholder="ENTER HOUSE NO"
+                          style={{ minWidth: 120 }}
                         />
                       </td>
                       <td>
@@ -198,7 +283,7 @@ const MultipleHawbPage: React.FC = () => {
                           className="form-control"
                           style={{ width: 80 }}
                           value={row.origin}
-                          onChange={e => updateRow(idx, 'origin', e.target.value)}
+                          onChange={e => updateRow(idx, 'origin', e.target.value.toUpperCase())}
                           maxLength={3}
                         />
                       </td>
@@ -207,7 +292,7 @@ const MultipleHawbPage: React.FC = () => {
                           className="form-control"
                           style={{ width: 80 }}
                           value={row.destination}
-                          onChange={e => updateRow(idx, 'destination', e.target.value)}
+                          onChange={e => updateRow(idx, 'destination', e.target.value.toUpperCase())}
                           maxLength={3}
                         />
                       </td>
@@ -245,12 +330,15 @@ const MultipleHawbPage: React.FC = () => {
                         />
                       </td>
                       <td>
-                        <button className="btn-link danger" onClick={() => deleteRow(idx)}>Delete</button>
+                        {!row.isExisting && (
+                          <button className="btn-link danger" onClick={() => deleteRow(idx)}>Delete</button>
+                        )}
                       </td>
                     </tr>
                   ))}
                   {/* Totals row */}
                   <tr style={{ fontWeight: 600, background: '#f8fafc' }}>
+                    <td></td>
                     <td>Total Hawb : {totalHawbs}</td>
                     <td colSpan={2}></td>
                     <td>Total PKG : {totalPkg}</td>
@@ -333,6 +421,7 @@ const MultipleHawbPage: React.FC = () => {
                       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                         <thead>
                           <tr style={{ background: '#e2e8f0' }}>
+                            <th style={thStyle}>#</th>
                             <th style={thStyle}>House AWB</th>
                             <th style={thStyle}>Port Of Origin</th>
                             <th style={thStyle}>Port Of Dest</th>
@@ -340,12 +429,12 @@ const MultipleHawbPage: React.FC = () => {
                             <th style={thStyle}>Weight</th>
                             <th style={thStyle}>Item Desc</th>
                             <th style={thStyle}>Msg Type</th>
-                            <th style={thStyle}>Transmission Date</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {mawb.hawbs.map((h: any) => (
+                          {mawb.hawbs.map((h: any, i: number) => (
                             <tr key={h.id}>
+                              <td style={{ ...tdStyle, color: 'var(--text-muted)', fontSize: 11 }}>{i + 1}</td>
                               <td style={tdStyle}>{h.hawb_no}</td>
                               <td style={tdStyle}>{h.origin}</td>
                               <td style={tdStyle}>{h.destination}</td>
@@ -353,15 +442,14 @@ const MultipleHawbPage: React.FC = () => {
                               <td style={tdStyle}>{parseFloat(String(h.gross_weight)).toFixed(2)}</td>
                               <td style={tdStyle}>{h.item_description || '—'}</td>
                               <td style={tdStyle}>{h.message_type || 'F'}</td>
-                              <td style={{ ...tdStyle, fontSize: 11 }}>{fmtDateTime(mawb.transmission_date)}</td>
                             </tr>
                           ))}
                           <tr style={{ fontWeight: 700, background: '#f1f5f9' }}>
-                            <td style={tdStyle}>Hawb Count: {mawb.hawbs.length}</td>
+                            <td style={tdStyle} colSpan={2}>Hawb Count: {mawb.hawbs.length}</td>
                             <td style={tdStyle} colSpan={2}>Total:</td>
                             <td style={tdStyle}>{mawb.hawbs.reduce((s: number, h: any) => s + Number(h.total_packages), 0)}</td>
                             <td style={tdStyle}>{mawb.hawbs.reduce((s: number, h: any) => s + parseFloat(h.gross_weight), 0).toFixed(2)}</td>
-                            <td style={tdStyle} colSpan={3}></td>
+                            <td style={tdStyle} colSpan={2}></td>
                           </tr>
                         </tbody>
                       </table>

@@ -40,6 +40,7 @@ const HawbPage: React.FC<HawbPageProps> = ({ initialMode }) => {
   const [amendedMawbs, setAmendedMawbs] = useState<Mawb[]>([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  const [mawbSearch, setMawbSearch] = useState('');
 
   const fetchHawbs = useCallback(async (p = page, ps = pageSize) => {
     setLoading(true);
@@ -186,17 +187,10 @@ const HawbPage: React.FC<HawbPageProps> = ({ initialMode }) => {
 
   return (
     <div className="page-container">
-      {/* Header links like reference image */}
+      {/* Header */}
       <div className="flex-between mb-16">
         <div>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 4 }}>
-            <span
-              style={{ color: 'var(--primary)', fontSize: 18, fontWeight: 700, cursor: 'pointer' }}
-              onClick={() => navigate('/hawb/new')}
-            >
-              Add House AWB
-            </span>
-            <span style={{ color: 'var(--border)' }}>|</span>
             <span
               style={{ color: 'var(--primary)', fontSize: 18, fontWeight: 700, cursor: 'pointer' }}
               onClick={() => navigate('/hawb/add-multiple')}
@@ -210,7 +204,6 @@ const HawbPage: React.FC<HawbPageProps> = ({ initialMode }) => {
         </div>
         <div className="flex-center gap-8">
           <button className="btn btn-secondary btn-sm" onClick={() => navigate('/mawb')}>← MAWBs</button>
-          <button className="btn btn-secondary btn-sm" onClick={loadChecklist}>CheckList</button>
         </div>
       </div>
 
@@ -229,16 +222,33 @@ const HawbPage: React.FC<HawbPageProps> = ({ initialMode }) => {
             />
             <button className="btn btn-secondary btn-sm" onClick={() => { setPage(1); fetchHawbs(1, pageSize); }}>Search</button>
           </div>
-          {/* MAWB filter */}
-          <select
-            className="form-control"
-            style={{ width: 220 }}
-            value={selectedMawbId}
-            onChange={e => setSelectedMawbId(e.target.value)}
-          >
-            <option value="">All MAWBs</option>
-            {mawbs.map(m => <option key={m.id} value={m.id}>{m.mawb_no}</option>)}
-          </select>
+          {/* MAWB filter with search */}
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            <input
+              className="form-control"
+              style={{ width: 140 }}
+              placeholder="Search MAWB..."
+              value={mawbSearch}
+              onChange={e => {
+                const val = e.target.value;
+                setMawbSearch(val);
+                if (!val.trim()) {
+                  api.get('/mawbs', { params: { pageSize: 1000 } }).then(r => setMawbs(r.data.data ?? [])).catch(() => {});
+                } else {
+                  api.get('/mawbs', { params: { pageSize: 50, search: val.trim() } }).then(r => setMawbs(r.data.data ?? [])).catch(() => {});
+                }
+              }}
+            />
+            <select
+              className="form-control"
+              style={{ width: 200 }}
+              value={selectedMawbId}
+              onChange={e => setSelectedMawbId(e.target.value)}
+            >
+              <option value="">All MAWBs</option>
+              {mawbs.map(m => <option key={m.id} value={m.id}>{m.mawb_no}</option>)}
+            </select>
+          </div>
           <button className="btn btn-primary btn-sm" onClick={openAdd}>+ Add House AWB</button>
         </div>
 

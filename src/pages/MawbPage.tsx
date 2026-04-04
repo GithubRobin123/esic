@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
-import { Mawb, MawbForm, Profile, Location } from '../types';
+import { Mawb, MawbForm } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import toast from 'react-hot-toast';
 import { fmtDateTime } from '../utils/dateUtils';
@@ -25,10 +25,10 @@ const MawbPage: React.FC = () => {
   const [activeMawb, setActiveMawb] = useState<Mawb | null>(null);
   const [form, setForm] = useState<MawbForm>(emptyForm);
   const [saving, setSaving] = useState(false);
-  const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [locations, setLocations] = useState<Location[]>([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  // Weight/package validation warning
+  const [validationWarn, setValidationWarn] = useState('');
   const navigate = useNavigate();
 
   const fetchMawbs = useCallback(async (p = page, ps = pageSize) => {
@@ -42,24 +42,23 @@ const MawbPage: React.FC = () => {
   }, [search, page, pageSize]);
 
   useEffect(() => { fetchMawbs(); }, [fetchMawbs]);
-  useEffect(() => {
-    api.get('/profiles').then(r => setProfiles(r.data)).catch(() => {});
-    api.get('/locations').then(r => setLocations(r.data)).catch(() => {});
-  }, []);
 
-  // Keep destination in sync whenever selectedLocation changes (covers late selection)
+  // Keep destination in sync whenever selectedLocation changes (add mode only)
   useEffect(() => {
     if (modalMode === 'add' && selectedLocation?.iata_code) {
-      setForm(prev => ({ ...prev, destination: selectedLocation.iata_code }));
+      const dest = selectedLocation.iata_code;
+      setForm(prev => ({ ...prev, destination: dest, customs_house_code: deriveChc(dest) }));
     }
-  }, [selectedLocation, modalMode]);
+  }, [selectedLocation, modalMode]); // eslint-disable-line
 
   const openAdd = () => {
     setActiveMawb(null);
+    setValidationWarn('');
+    const dest = selectedLocation?.iata_code || '';
     setForm({
       ...emptyForm,
-      destination: selectedLocation?.iata_code || '',
-      customs_house_code: user?.customs_house_code || '',
+      destination: dest,
+      customs_house_code: deriveChc(dest) || selectedLocation?.customs_house_code || user?.customs_house_code || '',
       profile_id: user?.profile_id || '',
     });
     setModalMode('add');
@@ -67,6 +66,7 @@ const MawbPage: React.FC = () => {
 
   const openEdit = (m: Mawb) => {
     setActiveMawb(m);
+    setValidationWarn('');
     setForm({
       mawb_no: m.mawb_no, mawb_date: m.mawb_date?.slice(0, 10) || '',
       origin: m.origin, destination: m.destination,
@@ -81,6 +81,7 @@ const MawbPage: React.FC = () => {
 
   const openPart = (m: Mawb) => {
     setActiveMawb(m);
+    setValidationWarn('');
     setForm({
       mawb_no: m.mawb_no, mawb_date: m.mawb_date?.slice(0, 10) || '',
       origin: m.origin, destination: m.destination,
@@ -94,6 +95,7 @@ const MawbPage: React.FC = () => {
 
   const openAmend = (m: Mawb) => {
     setActiveMawb(m);
+    setValidationWarn('');
     setForm({
       mawb_no: m.mawb_no, mawb_date: m.mawb_date?.slice(0, 10) || '',
       origin: m.origin, destination: m.destination,
@@ -107,6 +109,7 @@ const MawbPage: React.FC = () => {
 
   const openDeleteConfirm = (m: Mawb) => {
     setActiveMawb(m);
+    setValidationWarn('');
     setForm({
       mawb_no: m.mawb_no, mawb_date: m.mawb_date?.slice(0, 10) || '',
       origin: m.origin, destination: m.destination,
@@ -116,6 +119,22 @@ const MawbPage: React.FC = () => {
       igm_no: m.igm_no || '', igm_date: m.igm_date?.slice(0, 10) || '',
     });
     setModalMode('delete-confirm');
+  };
+
+  // Validate HAWB totals vs MAWB when weight/packages change
+  const checkHawbValidation = async (mawbId: string | undefined, mawbPkgs: string | number, mawbWt: string | number) => {
+    if (!mawbId) return;
+    try {
+      const res = await api.get('/hawbs', { params: { mawb_id: mawbId, pageSize: 1000 } });
+      const hawbs = res.data.data || [];
+      if (hawbs.length === 0) { setValidationWarn(''); return; }
+      const totalPkg = hawbs.reduce((s: number, h: any) => s + Number(h.total_packages), 0);
+      const totalWt = hawbs.reduce((s: number, h: any) => s + parseFloat(h.gross_weight), 0);
+      const warnings: string[] = [];
+      if (Number(mawbPkgs) !== totalPkg) warnings.push(`MAWB packages (${mawbPkgs}) ≠ HAWB total packages (${totalPkg})`);
+      if (Math.abs(parseFloat(String(mawbWt)) - totalWt) > 0.01) warnings.push(`MAWB weight (${mawbWt}) ≠ HAWB total weight (${totalWt.toFixed(2)})`);
+      setValidationWarn(warnings.join(' | '));
+    } catch { /* ignore */ }
   };
 
   const handleSave = async () => {
@@ -174,23 +193,35 @@ const MawbPage: React.FC = () => {
 
   const handleDownload = async (m: Mawb) => {
     try {
-      const res = await api.post(`/transmissions/generate-cgm/${m.id}`, {}, { responseType: 'blob' });
-      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const res = await api.post(`/transmissions/generate-cgm/${m.id}`, {});
+      const { fileName, fileContent } = res.data;
+      const url = window.URL.createObjectURL(new Blob([fileContent], { type: 'text/plain' }));
       const link = document.createElement('a');
-      const disp = res.headers['content-disposition'] || '';
-      const match = disp.match(/filename="?([^"]+)"?/);
       link.href = url;
-      link.download = match ? match[1] : `${m.mawb_no}.cgm`;
+      link.download = fileName;
       link.click();
       window.URL.revokeObjectURL(url);
-      toast.success('CGM file downloaded');
+      toast.success(`Downloaded: ${fileName}`);
       fetchMawbs();
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Download failed');
     }
   };
 
-  const f = (k: keyof MawbForm, v: string) => setForm(p => ({ ...p, [k]: v }));
+  // Auto-derive Customs House Code from destination: IN{DEST}4 e.g. DEL → INDEL4
+  const deriveChc = (dest: string) =>
+    dest.length >= 3 ? `IN${dest.substring(0, 3).toUpperCase()}4` : '';
+
+  const f = (k: keyof MawbForm, v: string) => {
+    setForm(p => {
+      const updated = { ...p, [k]: v };
+      // Auto-fill customs_house_code when destination changes
+      if (k === 'destination') {
+        updated.customs_house_code = deriveChc(v);
+      }
+      return updated;
+    });
+  };
 
   const msgTypeBadge = (t?: string) => {
     const map: Record<string, string> = { F: 'badge-info', A: 'badge-warning', D: 'badge-danger' };
@@ -203,7 +234,8 @@ const MawbPage: React.FC = () => {
     return <span className={`badge ${map[s] || 'badge-gray'}`}>{s}</span>;
   };
 
-  const showFlightDetails = modalMode === 'edit' || modalMode === 'part' || modalMode === 'amend' || modalMode === 'delete-confirm';
+  // Flight details shown in edit/part/amend only (delete-confirm has its own layout)
+  const showFlightDetails = modalMode === 'edit' || modalMode === 'part' || modalMode === 'amend';
   const mawbNoDisabled = modalMode === 'edit';
 
   const modalTitle: Record<string, string> = {
@@ -278,7 +310,8 @@ const MawbPage: React.FC = () => {
                       <td>{parseFloat(String(m.gross_weight)).toFixed(2)}</td>
                       <td>
                         <span
-                          style={{ color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }}
+                          className="badge badge-info"
+                          style={{ cursor: 'pointer' }}
                           onClick={() => navigate(`/hawb?mawb_id=${m.id}&mawb_no=${m.mawb_no}`)}
                         >
                           {m.hawb_count || 0} HAWBs
@@ -323,7 +356,15 @@ const MawbPage: React.FC = () => {
             </div>
             <div className="modal-body">
               <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>MAWB Details</p>
-              <div className="form-row form-row-3">
+
+              {/* Validation warning */}
+              {validationWarn && (
+                <div className="alert alert-warning" style={{ marginBottom: 10, fontSize: 12 }}>
+                  ⚠️ {validationWarn}
+                </div>
+              )}
+
+              <div className="form-row form-row-2">
                 <div className="form-group">
                   <label className="form-label">Master AWB No. <span className="required">*</span></label>
                   <input
@@ -353,31 +394,18 @@ const MawbPage: React.FC = () => {
                   <label className="form-label">MAWB Date</label>
                   <input className="form-control" type="date" value={form.mawb_date} onChange={e => f('mawb_date', e.target.value)} />
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Profile</label>
-                  <select className="form-control" value={form.profile_id} onChange={e => f('profile_id', e.target.value)}>
-                    <option value="">Select profile...</option>
-                    {profiles.map(p => <option key={p.id} value={p.id}>{p.profile_code} — {p.company_name}</option>)}
-                  </select>
-                </div>
               </div>
               <div className="form-row form-row-3">
                 <div className="form-group">
                   <label className="form-label">Port Of Origin <span className="required">*</span></label>
-                  {modalMode === 'add' ? (
-                    <input
-                      className="form-control font-mono"
-                      value={form.origin}
-                      onChange={e => f('origin', e.target.value.toUpperCase())}
-                      placeholder="e.g. DXB"
-                      maxLength={3}
-                    />
-                  ) : (
-                    <select className="form-control" value={form.origin} onChange={e => f('origin', e.target.value)}>
-                      <option value="">Select...</option>
-                      {locations.map(l => <option key={l.iata_code} value={l.iata_code}>{l.iata_code} — {l.city_name}</option>)}
-                    </select>
-                  )}
+                  {/* Always text input — user types/edits directly */}
+                  <input
+                    className="form-control font-mono"
+                    value={form.origin}
+                    onChange={e => f('origin', e.target.value.toUpperCase())}
+                    placeholder="e.g. DXB"
+                    maxLength={3}
+                  />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Port Of Destination <span className="required">*</span></label>
@@ -390,10 +418,13 @@ const MawbPage: React.FC = () => {
                       title="Auto-filled from selected login location"
                     />
                   ) : (
-                    <select className="form-control" value={form.destination} onChange={e => f('destination', e.target.value)}>
-                      <option value="">Select...</option>
-                      {locations.map(l => <option key={l.iata_code} value={l.iata_code}>{l.iata_code} — {l.city_name}</option>)}
-                    </select>
+                    <input
+                      className="form-control font-mono"
+                      value={form.destination}
+                      onChange={e => f('destination', e.target.value.toUpperCase())}
+                      placeholder="e.g. DEL"
+                      maxLength={3}
+                    />
                   )}
                 </div>
                 <div className="form-group">
@@ -404,15 +435,29 @@ const MawbPage: React.FC = () => {
               <div className="form-row form-row-2">
                 <div className="form-group">
                   <label className="form-label">Total Packages</label>
-                  <input className="form-control" type="number" value={form.total_packages} onChange={e => f('total_packages', e.target.value)} min={0} />
+                  <input
+                    className="form-control" type="number" value={form.total_packages}
+                    onChange={e => {
+                      f('total_packages', e.target.value);
+                      if (modalMode === 'edit') checkHawbValidation(activeMawb?.id, e.target.value, form.gross_weight);
+                    }}
+                    min={0}
+                  />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Gross Weight (KGS)</label>
-                  <input className="form-control" type="number" step="0.001" value={form.gross_weight} onChange={e => f('gross_weight', e.target.value)} min={0} />
+                  <input
+                    className="form-control" type="number" step="0.001" value={form.gross_weight}
+                    onChange={e => {
+                      f('gross_weight', e.target.value);
+                      if (modalMode === 'edit') checkHawbValidation(activeMawb?.id, form.total_packages, e.target.value);
+                    }}
+                    min={0}
+                  />
                 </div>
               </div>
 
-              {/* Flight details – only shown in edit/part/amend */}
+              {/* Flight details – shown in edit/part/amend */}
               {showFlightDetails && (
                 <>
                   <div className="divider" />
@@ -450,27 +495,64 @@ const MawbPage: React.FC = () => {
         </div>
       )}
 
-      {/* Delete Confirm Dialog */}
+      {/* Delete Confirm Dialog — shows MAWB + flight details + delete options */}
       {modalMode === 'delete-confirm' && activeMawb && (
         <div className="modal-overlay">
-          <div className="modal" style={{ maxWidth: 500 }}>
+          <div className="modal" style={{ maxWidth: 560 }}>
             <div className="modal-header">
               <span className="modal-title">Delete MAWB — {activeMawb.mawb_no}</span>
               <button className="modal-close" onClick={() => setModalMode(null)}>×</button>
             </div>
             <div className="modal-body">
-              <p style={{ marginBottom: 16 }}>Choose how to delete this MAWB:</p>
+              {/* MAWB summary */}
+              <div style={{ background: '#f8fafc', borderRadius: 6, padding: '10px 14px', marginBottom: 14, fontSize: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px' }}>
+                  <div><span className="text-muted">MAWB No:</span> <strong className="font-mono">{activeMawb.mawb_no}</strong></div>
+                  <div><span className="text-muted">Route:</span> <strong>{activeMawb.origin} → {activeMawb.destination}</strong></div>
+                  <div><span className="text-muted">Packages:</span> <strong>{activeMawb.total_packages}</strong></div>
+                  <div><span className="text-muted">Weight:</span> <strong>{parseFloat(String(activeMawb.gross_weight)).toFixed(2)} KGS</strong></div>
+                </div>
+              </div>
+
+              {/* Flight details for Delete & Copy */}
+              <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 14, marginBottom: 14 }}>
+                <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>
+                  Flight Details (for Delete Copy)
+                </p>
+                <div className="form-row form-row-2" style={{ marginBottom: 8 }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Flight No.</label>
+                    <input className="form-control" value={form.flight_no} onChange={e => f('flight_no', e.target.value)} placeholder="e.g. AI123" maxLength={15} />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Flight Date</label>
+                    <input className="form-control" type="date" value={form.flight_origin_date} onChange={e => f('flight_origin_date', e.target.value)} />
+                  </div>
+                </div>
+                <div className="form-row form-row-2">
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">IGM No.</label>
+                    <input className="form-control" value={form.igm_no} onChange={e => f('igm_no', e.target.value)} placeholder="Enter IGM No" maxLength={7} />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">IGM Date</label>
+                    <input className="form-control" type="date" value={form.igm_date} onChange={e => f('igm_date', e.target.value)} />
+                  </div>
+                </div>
+              </div>
+
+              <p style={{ marginBottom: 12, fontWeight: 500 }}>Choose how to delete this MAWB:</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 14 }}>
                   <div style={{ fontWeight: 600, marginBottom: 4 }}>1. Permanent Delete</div>
                   <p className="text-muted text-sm" style={{ marginBottom: 12 }}>
-                    Completely removes this MAWB and all its HAWBs from the system. Cannot be undone.
+                    Completely removes this MAWB and all its HAWBs. Cannot be undone.
                   </p>
                   <button className="btn btn-sm" style={{ background: '#ef4444', color: '#fff' }} onClick={handlePermanentDelete} disabled={saving}>
                     Permanently Delete
                   </button>
                 </div>
-                <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 14 }}>
                   <div style={{ fontWeight: 600, marginBottom: 4 }}>2. Delete &amp; Copy (message type D)</div>
                   <p className="text-muted text-sm" style={{ marginBottom: 12 }}>
                     Creates a new MAWB with suffix <strong>-D1</strong> and message type D for customs submission.
