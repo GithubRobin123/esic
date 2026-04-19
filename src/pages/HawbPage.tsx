@@ -82,12 +82,28 @@ const HawbPage: React.FC<HawbPageProps> = ({ initialMode }) => {
     }));
   };
 
+  // Only draft MAWBs can receive new HAWBs
+  const draftMawbs = mawbs.filter(m => m.status === 'draft');
+
   const openAdd = () => {
+    // If a specific MAWB is selected and it's transmitted, block add
+    if (selectedMawbId) {
+      const selected = mawbs.find(m => m.id === selectedMawbId);
+      if (selected && selected.status !== 'draft') {
+        toast.error('Cannot add HAWBs to a transmitted MAWB. Use Amend or Part instead.');
+        return;
+      }
+    }
+    if (draftMawbs.length === 0) {
+      toast.error('No draft MAWBs available. Create a MAWB first or use Amend/Part for transmitted MAWBs.');
+      return;
+    }
     setActiveHawb(null);
-    const mawb = mawbs.find(m => m.id === selectedMawbId);
+    const mawbId = selectedMawbId && draftMawbs.find(m => m.id === selectedMawbId) ? selectedMawbId : (draftMawbs[0]?.id || '');
+    const mawb = draftMawbs.find(m => m.id === mawbId);
     setForm({
       ...emptyForm,
-      mawb_id: selectedMawbId,
+      mawb_id: mawbId,
       origin: mawb?.origin || '',
       destination: mawb?.destination || '',
     });
@@ -254,10 +270,14 @@ const HawbPage: React.FC<HawbPageProps> = ({ initialMode }) => {
               onChange={e => setSelectedMawbId(e.target.value)}
             >
               <option value="">All MAWBs</option>
-              {mawbs.map(m => <option key={m.id} value={m.id}>{m.mawb_no.replace(/-[APD]\d+$/, '')}</option>)}
+              {mawbs.map(m => <option key={m.id} value={m.id}>{m.mawb_no}</option>)}
             </select>
           </div>
-          <button className="btn btn-primary btn-sm" onClick={openAdd}>+ Add House AWB</button>
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={openAdd}
+            title={selectedMawbId && mawbs.find(m => m.id === selectedMawbId)?.status !== 'draft' ? 'MAWB is transmitted — use Amend or Part' : ''}
+          >+ Add House AWB</button>
         </div>
 
         <div className="table-wrapper">
@@ -287,7 +307,7 @@ const HawbPage: React.FC<HawbPageProps> = ({ initialMode }) => {
               <tbody>
                 {hawbs.map(h => (
                   <tr key={h.id}>
-                    <td><span className="font-mono" style={{ fontWeight: 600 }}>{h.hawb_no}</span></td>
+                    <td><span className="font-mono" style={{ fontWeight: 600 }}>{h.hawb_no.replace(/-[APD]\d+$/, '')}</span></td>
                     <td>{h.origin}</td>
                     <td>{h.destination}</td>
                     <td>{h.total_packages}</td>
@@ -332,7 +352,7 @@ const HawbPage: React.FC<HawbPageProps> = ({ initialMode }) => {
                   {modalMode === 'edit' ? (
                     // Edit: MAWB disabled
                     <select className="form-control" value={form.mawb_id} disabled style={{ background: '#f1f5f9' }}>
-                      {mawbs.map(m => <option key={m.id} value={m.id}>{m.mawb_no.replace(/-[APD]\d+$/, '')}</option>)}
+                      {mawbs.map(m => <option key={m.id} value={m.id}>{m.mawb_no}</option>)}
                     </select>
                   ) : modalMode === 'amend' ? (
                     // Amend: show amended MAWBs (children of parent)
@@ -344,10 +364,10 @@ const HawbPage: React.FC<HawbPageProps> = ({ initialMode }) => {
                       )}
                     </select>
                   ) : (
-                    // Add: all MAWBs
+                    // Add: only draft MAWBs
                     <select className="form-control" value={form.mawb_id} onChange={e => handleMawbSelect(e.target.value)}>
                       <option value="">Select MAWB...</option>
-                      {mawbs.map(m => <option key={m.id} value={m.id}>{m.mawb_no.replace(/-[APD]\d+$/, '')}</option>)}
+                      {draftMawbs.map(m => <option key={m.id} value={m.id}>{m.mawb_no}</option>)}
                     </select>
                   )}
                 </div>

@@ -16,7 +16,8 @@ const LocationPage: React.FC = () => {
   useEffect(() => {
     api.get('/locations')
       .then(r => {
-        const active = (r.data as Location[]).filter(l => l.is_active);
+        // Only show Indian customs locations (customs_house_code starts with 'IN')
+        const active = (r.data as Location[]).filter(l => l.is_active && l.customs_house_code?.startsWith('IN'));
         setLocations(active);
         // Pre-select current session location if still in the list
         if (selectedLocation) {

@@ -27,11 +27,12 @@ const MawbPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  const [showTransmitted, setShowTransmitted] = useState(false);
   // Weight/package validation warning
   const [validationWarn, setValidationWarn] = useState('');
   const navigate = useNavigate();
 
-  const fetchMawbs = useCallback(async (p = page, ps = pageSize) => {
+  const fetchMawbs = useCallback(async (p = page, ps = pageSize, transmitted = showTransmitted) => {
     setLoading(true);
     try {
       const res = await api.get('/mawbs', { params: {
@@ -39,12 +40,13 @@ const MawbPage: React.FC = () => {
         pageSize: ps,
         ...(search ? { search } : {}),
         ...(selectedLocation?.customs_house_code ? { customs_house_code: selectedLocation.customs_house_code } : {}),
+        ...(!transmitted ? { status: 'draft' } : {}),
       } });
       setMawbs(res.data.data);
       setTotal(res.data.total);
     } catch { toast.error('Failed to load MAWBs'); }
     finally { setLoading(false); }
-  }, [search, page, pageSize, selectedLocation?.customs_house_code]);
+  }, [search, page, pageSize, selectedLocation?.customs_house_code, showTransmitted]);
 
   useEffect(() => { fetchMawbs(); }, [fetchMawbs]);
 
@@ -291,6 +293,13 @@ const MawbPage: React.FC = () => {
             </div>
             <button className="btn btn-secondary btn-sm" onClick={() => { setPage(1); fetchMawbs(1, pageSize); }}>Search</button>
           </div>
+          <button
+            className={`btn btn-sm ${showTransmitted ? 'btn-warning' : 'btn-secondary'}`}
+            onClick={() => { setShowTransmitted(v => { fetchMawbs(1, pageSize, !v); return !v; }); setPage(1); }}
+            style={{ whiteSpace: 'nowrap' }}
+          >
+            {showTransmitted ? 'Hide Transmitted' : 'Show Transmitted'}
+          </button>
         </div>
 
         <div className="table-wrapper">
@@ -322,7 +331,7 @@ const MawbPage: React.FC = () => {
                 <tbody>
                   {mawbs.map(m => (
                     <tr key={m.id}>
-                      <td><span className="font-mono" style={{ fontWeight: 600 }}>{m.mawb_no}</span></td>
+                      <td><span className="font-mono" style={{ fontWeight: 600 }}>{m.mawb_no.replace(/-[APD]\d+$/, '')}</span></td>
                       <td>{msgTypeBadge(m.message_type)}</td>
                       <td>{m.origin}</td>
                       <td>{m.destination}</td>

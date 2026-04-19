@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import { Mawb } from '../types';
 import toast from 'react-hot-toast';
-import { fmtDateTime } from '../utils/dateUtils';
 import { useAuth } from '../hooks/useAuth';
 
 interface HawbRow {
@@ -33,6 +32,7 @@ const MultipleHawbPage: React.FC = () => {
     api.get('/mawbs', {
       params: {
         pageSize: 1000,
+        status: 'draft',
         ...(selectedLocation?.customs_house_code ? { customs_house_code: selectedLocation.customs_house_code } : {}),
       }
     }).then(r => setMawbs(r.data.data ?? [])).catch(() => {});
