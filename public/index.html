@@ -5,6 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#0ea5e9" />
     <meta name="description" content="EDISS - Electronic Data Interchange Shipping System" />
+    <script>
+      (function () {
+        var redirect = sessionStorage.getItem('spa_redirect');
+        if (!redirect) return;
+        sessionStorage.removeItem('spa_redirect');
+        if (redirect !== window.location.pathname + window.location.search + window.location.hash) {
+          window.history.replaceState(null, '', redirect);
+        }
+      })();
+    </script>
     <title>EDISS - Electronic Data Interchange Shipping System</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✈</text></svg>" />
   </head>
