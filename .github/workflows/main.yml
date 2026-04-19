@@ -1,0 +1,15 @@
+name: Keep Backend Alive
+
+on:
+  schedule:
+    # Runs every 14 minutes (cron minimum is 5 min on GitHub Actions)
+    - cron: '*/14 * * * *'
+  workflow_dispatch: # allow manual trigger
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping backend health endpoint
+        run: |
+          curl -f https://ediss-backend.onrender.com/health || echo "Ping failed"
