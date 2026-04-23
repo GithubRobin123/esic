@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import api from '../utils/api';
 import { Location } from '../types';
 import { useAuth } from '../hooks/useAuth';
+import toast from 'react-hot-toast';
 
 export const LocationSelectModal: React.FC = () => {
   const { setSelectedLocation, user } = useAuth();
@@ -22,7 +23,7 @@ export const LocationSelectModal: React.FC = () => {
           if (found) setSelected(found.iata_code);
         }
       })
-      .catch(() => {})
+      .catch(() => toast.error('Failed to load locations'))
       .finally(() => setLoading(false));
   }, [user]);
 

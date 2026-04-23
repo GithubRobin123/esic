@@ -222,7 +222,8 @@ const MawbPage: React.FC = () => {
       link.click();
       window.URL.revokeObjectURL(url);
       toast.success(`Downloaded: ${fileName}`);
-      fetchMawbs();
+      setShowTransmitted(true);
+      fetchMawbs(page, pageSize, true);
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Download failed');
     }
@@ -331,7 +332,7 @@ const MawbPage: React.FC = () => {
                 <tbody>
                   {mawbs.map(m => (
                     <tr key={m.id}>
-                      <td><span className="font-mono" style={{ fontWeight: 600 }}>{m.mawb_no.replace(/-[APD]\d+$/, '')}</span></td>
+                      <td><span className="font-mono" style={{ fontWeight: 600 }}>{m.mawb_no}</span></td>
                       <td>{msgTypeBadge(m.message_type)}</td>
                       <td>{m.origin}</td>
                       <td>{m.destination}</td>

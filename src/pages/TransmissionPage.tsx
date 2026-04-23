@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../utils/api';
 import { Mawb, CgmPreview, Transmission } from '../types';
 import toast from 'react-hot-toast';
 import { fmtDateTime } from '../utils/dateUtils';
+import Pagination from '../components/Pagination';
 
 const TransmissionPage: React.FC = () => {
   const [params] = useSearchParams();
@@ -14,6 +15,9 @@ const TransmissionPage: React.FC = () => {
   const [preview, setPreview] = useState<CgmPreview | null>(null);
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState<Transmission[]>([]);
+  const [histTotal, setHistTotal] = useState(0);
+  const [histPage, setHistPage] = useState(1);
+  const [histPageSize, setHistPageSize] = useState(25);
   const [activeTab, setActiveTab] = useState<'generate' | 'history'>('generate');
 
   // MAWB search
@@ -21,10 +25,17 @@ const TransmissionPage: React.FC = () => {
   const [searchLoading, setSearchLoading] = useState(false);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const fetchHistory = useCallback(async () => {
+    api.get('/transmissions/history', { params: { page: histPage, pageSize: histPageSize } })
+      .then(r => { setHistory(r.data.data ?? []); setHistTotal(r.data.total ?? 0); })
+      .catch(() => {});
+  }, [histPage, histPageSize]);
+
   useEffect(() => {
     api.get('/mawbs', { params: { pageSize: 1000, status: 'draft' } }).then(r => setMawbs(r.data.data ?? [])).catch(() => {});
-    api.get('/transmissions/history').then(r => setHistory(r.data)).catch(() => {});
-  }, []);
+  }, []); // eslint-disable-line
+
+  useEffect(() => { fetchHistory(); }, [fetchHistory]);
 
   useEffect(() => {
     if (defaultMawbId) handlePreview(defaultMawbId);
@@ -90,7 +101,7 @@ const TransmissionPage: React.FC = () => {
       link.click();
       window.URL.revokeObjectURL(url);
       toast.success(`Downloaded: ${fileName}`);
-      api.get('/transmissions/history').then(r => setHistory(r.data)).catch(() => {});
+      setHistPage(1); // triggers fetchHistory via useEffect
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Download failed');
     }
@@ -140,7 +151,7 @@ const TransmissionPage: React.FC = () => {
                     <option value="">Choose a MAWB...</option>
                     {mawbs.map(m => (
                       <option key={m.id} value={m.id}>
-                        {m.mawb_no.replace(/-[APD]\d+$/, '')} ({m.hawb_count || 0} HAWBs)
+                        {m.mawb_no} ({m.hawb_count || 0} HAWBs)
                       </option>
                     ))}
                   </select>
@@ -264,6 +275,13 @@ const TransmissionPage: React.FC = () => {
               </table>
             )}
           </div>
+          <Pagination
+            total={histTotal}
+            page={histPage}
+            pageSize={histPageSize}
+            onPage={p => setHistPage(p)}
+            onPageSize={ps => { setHistPageSize(ps); setHistPage(1); }}
+          />
         </div>
       )}
     </div>

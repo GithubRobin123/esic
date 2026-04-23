@@ -3,6 +3,7 @@ import api from '../utils/api';
 import toast from 'react-hot-toast';
 import { fmtDate, fmtDateTime } from '../utils/dateUtils';
 import { useAuth } from '../hooks/useAuth';
+import Pagination from '../components/Pagination';
 
 const thS: React.CSSProperties = { border: '1px solid #cbd5e1', padding: '5px 8px', background: '#e2e8f0', fontWeight: 700, fontSize: 11, whiteSpace: 'nowrap' };
 const tdS: React.CSSProperties = { border: '1px solid #cbd5e1', padding: '4px 8px', fontSize: 11 };
@@ -129,6 +130,9 @@ const ChecklistModal: React.FC<{
 // ─── Checklist Report ─────────────────────────────────────────────────────────
 export const ChecklistPage: React.FC = () => {
   const [rows, setRows] = useState<any[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState({ from_date: '', to_date: '', status: '' });
   const [checklistTarget, setChecklistTarget] = useState<{ id: string; mawb_no: string } | null>(null);
@@ -136,18 +140,19 @@ export const ChecklistPage: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const params: any = {};
+      const params: any = { page, pageSize };
       if (filters.from_date) params.from_date = filters.from_date;
       if (filters.to_date) params.to_date = filters.to_date;
       if (filters.status) params.status = filters.status;
       const r = await api.get('/reports/checklist', { params });
-      setRows(r.data);
+      setRows(r.data.data ?? []);
+      setTotal(r.data.total ?? 0);
     } catch {
       toast.error('Failed to load checklist');
     } finally { setLoading(false); }
-  }, [filters]);
+  }, [page, pageSize, filters]);
 
-  useEffect(() => { load(); }, []); // eslint-disable-line
+  useEffect(() => { load(); }, [load]);
 
   const f = (k: string, v: string) => setFilters(p => ({ ...p, [k]: v }));
 
@@ -179,10 +184,10 @@ export const ChecklistPage: React.FC = () => {
                 <option value="error">Error</option>
               </select>
             </div>
-            <button className="btn btn-primary" onClick={load} disabled={loading}>
+            <button className="btn btn-primary" onClick={() => setPage(1)} disabled={loading}>
               {loading ? 'Loading...' : 'Search'}
             </button>
-            <button className="btn btn-secondary" onClick={() => { setFilters({ from_date: '', to_date: '', status: '' }); }}>
+            <button className="btn btn-secondary" onClick={() => { setFilters({ from_date: '', to_date: '', status: '' }); setPage(1); }}>
               Clear
             </button>
           </div>
@@ -191,7 +196,7 @@ export const ChecklistPage: React.FC = () => {
 
       <div className="card">
         <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span className="card-title">Results ({rows.length} MAWBs)</span>
+          <span className="card-title">Results ({total} MAWBs)</span>
           <span className="text-muted text-sm">
             Total Pkgs: <strong>{totalPkgs}</strong> &nbsp;|&nbsp; Total Weight: <strong>{totalWt.toFixed(2)} kg</strong>
           </span>
@@ -221,7 +226,7 @@ export const ChecklistPage: React.FC = () => {
               )}
               {rows.map((r, i) => (
                 <tr key={r.id}>
-                  <td className="text-muted text-sm">{i + 1}</td>
+                  <td className="text-muted text-sm">{(page - 1) * pageSize + i + 1}</td>
                   <td className="font-mono" style={{ fontWeight: 600 }}>{r.mawb_no}</td>
                   <td className="text-sm">{r.mawb_date ? fmtDate(r.mawb_date) : '—'}</td>
                   <td className="font-mono">{r.origin}</td>
@@ -256,9 +261,16 @@ export const ChecklistPage: React.FC = () => {
             </tbody>
           </table>
         </div>
+        <Pagination
+          total={total}
+          page={page}
+          pageSize={pageSize}
+          onPage={p => setPage(p)}
+          onPageSize={ps => { setPageSize(ps); setPage(1); }}
+        />
       </div>
 
-      {/* Eye button checklist modal */}
+      {/* checklist modal */}
       {checklistTarget && (
         <ChecklistModal
           mawbId={checklistTarget.id}
@@ -291,6 +303,7 @@ export const ConsolStatementPage: React.FC = () => {
   const [rows, setRows] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -310,16 +323,17 @@ export const ConsolStatementPage: React.FC = () => {
     return p;
   };
 
-  const load = useCallback(async (p = 1) => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await api.get('/reports/consol-statement', { params: buildParams({ page: p }) });
+      const r = await api.get('/reports/consol-statement', { params: buildParams({ page, pageSize }) });
       setRows(r.data.data);
       setTotal(r.data.total);
-      setPage(p);
     } catch { toast.error('Failed to load statement'); }
     finally { setLoading(false); }
-  }, [filters]); // eslint-disable-line
+  }, [page, pageSize, filters]); // eslint-disable-line
+
+  useEffect(() => { load(); }, [load]);
 
   const f = (k: string, v: string) => setFilters(p => ({ ...p, [k]: v }));
 
@@ -362,9 +376,6 @@ export const ConsolStatementPage: React.FC = () => {
     win.document.close(); win.focus(); win.print();
   };
 
-  const pageSize = 100;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-
   return (
     <div className="page-container">
       <h1 className="page-title">Statement by Consol</h1>
@@ -389,7 +400,7 @@ export const ConsolStatementPage: React.FC = () => {
               <label className="form-label">To Date</label>
               <input className="form-control" type="date" value={filters.to_date} onChange={e => f('to_date', e.target.value)} />
             </div>
-            <button className="btn btn-primary" onClick={() => load(1)} disabled={loading}>
+            <button className="btn btn-primary" onClick={() => setPage(1)} disabled={loading}>
               {loading ? 'Loading...' : 'Search'}
             </button>
             {rows.length > 0 && (
@@ -405,17 +416,8 @@ export const ConsolStatementPage: React.FC = () => {
       </div>
 
       <div className="card">
-        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span className="card-title">
-            {total > 0 ? `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, total)} of ${total} records` : 'No records'}
-          </span>
-          {totalPages > 1 && (
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <button className="btn btn-secondary btn-sm" disabled={page === 1} onClick={() => load(page - 1)}>‹ Prev</button>
-              <span className="text-sm text-muted">Page {page} / {totalPages}</span>
-              <button className="btn btn-secondary btn-sm" disabled={page === totalPages} onClick={() => load(page + 1)}>Next ›</button>
-            </div>
-          )}
+        <div className="card-header">
+          <span className="card-title">{total > 0 ? `${total} records` : 'No records'}</span>
         </div>
         <div className="table-wrapper">
           <div id="consol-stmt-print">
@@ -469,6 +471,13 @@ export const ConsolStatementPage: React.FC = () => {
             </table>
           </div>
         </div>
+        <Pagination
+          total={total}
+          page={page}
+          pageSize={pageSize}
+          onPage={p => setPage(p)}
+          onPageSize={ps => { setPageSize(ps); setPage(1); }}
+        />
       </div>
     </div>
   );
