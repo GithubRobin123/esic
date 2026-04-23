@@ -33,6 +33,9 @@ const AppRoutes: React.FC = () => {
   const { isAuthenticated, needsLocationSelect } = useAuth();
   const currentPath = useLocation().pathname;
 
+
+  console.log('AppRoutes render', { isAuthenticated, needsLocationSelect, currentPath });
+
   if (!isAuthenticated) {
     return (
       <Routes>
