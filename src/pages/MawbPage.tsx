@@ -40,7 +40,6 @@ const MawbPage: React.FC = () => {
         pageSize: ps,
         ...(search ? { search } : {}),
         ...(selectedLocation?.customs_house_code ? { customs_house_code: selectedLocation.customs_house_code } : {}),
-        ...(!transmitted ? { status: 'draft' } : {}),
       } });
       setMawbs(res.data.data);
       setTotal(res.data.total);

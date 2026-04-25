@@ -404,7 +404,7 @@ const HawbPage: React.FC<HawbPageProps> = ({ initialMode }) => {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Item Description:</label>
-                  <input className="form-control" value={form.item_description} onChange={e => f('item_description', e.target.value.replace(/[^a-zA-Z0-9 .,\-/]/g, ''))} placeholder="AS PER INVOICE" maxLength={100} />
+                  <input className="form-control" value={form.item_description} onChange={e => f('item_description', e.target.value.replace(/[^a-zA-Z0-9 .,\-/]/g, ''))} placeholder="AS PER INVOICE" maxLength={30} />
                 </div>
               </div>
             </div>
