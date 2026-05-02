@@ -1,5 +1,6 @@
-const SIGNER_BASE = 'http://localhost:7070';
-
+const SIGNER_BASE = window.location.hostname === 'localhost'
+  ? 'http://localhost:7070'
+  : 'https://localhost:7443';
 export async function isSignerRunning(): Promise<boolean> {
   try {
     const res = await fetch(`${SIGNER_BASE}/signservice/health`, {
