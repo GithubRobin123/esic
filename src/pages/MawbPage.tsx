@@ -6,6 +6,7 @@ import { useAuth } from '../hooks/useAuth';
 import toast from 'react-hot-toast';
 import { fmtDateTime } from '../utils/dateUtils';
 import Pagination from '../components/Pagination';
+import { isSignerRunning, signCgmContent, downloadSignedCgm, SIGNER_SETUP_MSG } from '../utils/localSigner';
 
 type ModalMode = 'add' | 'edit' | 'part' | 'amend' | 'delete-confirm' | null;
 
@@ -14,6 +15,24 @@ const emptyForm: MawbForm = {
   total_packages: '', gross_weight: '', customs_house_code: '', profile_id: '',
   flight_no: '', flight_origin_date: '', igm_no: '', igm_date: '',
 };
+
+interface InlineHawbRow {
+  hawb_no: string;
+  origin: string;
+  destination: string;
+  total_packages: string;
+  gross_weight: string;
+  item_description: string;
+}
+
+const createInlineHawbRow = (origin = '', destination = ''): InlineHawbRow => ({
+  hawb_no: '',
+  origin,
+  destination,
+  total_packages: '',
+  gross_weight: '',
+  item_description: '',
+});
 
 const MawbPage: React.FC = () => {
   const { selectedLocation, user } = useAuth();
@@ -25,11 +44,13 @@ const MawbPage: React.FC = () => {
   const [activeMawb, setActiveMawb] = useState<Mawb | null>(null);
   const [form, setForm] = useState<MawbForm>(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [signingId, setSigningId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [showTransmitted, setShowTransmitted] = useState(false);
   // Weight/package validation warning
   const [validationWarn, setValidationWarn] = useState('');
+  const [inlineHawbs, setInlineHawbs] = useState<InlineHawbRow[]>([]);
   const navigate = useNavigate();
 
   const fetchMawbs = useCallback(async (p = page, ps = pageSize, transmitted = showTransmitted) => {
@@ -60,6 +81,7 @@ const MawbPage: React.FC = () => {
   const openAdd = () => {
     setActiveMawb(null);
     setValidationWarn('');
+    setInlineHawbs([]);
     const dest = selectedLocation?.iata_code || '';
     setForm({
       ...emptyForm,
@@ -73,6 +95,7 @@ const MawbPage: React.FC = () => {
   const openEdit = (m: Mawb) => {
     setActiveMawb(m);
     setValidationWarn('');
+    setInlineHawbs([]);
     setForm({
       mawb_no: m.mawb_no, mawb_date: m.mawb_date?.slice(0, 10) || '',
       origin: m.origin, destination: m.destination,
@@ -88,6 +111,7 @@ const MawbPage: React.FC = () => {
   const openPart = (m: Mawb) => {
     setActiveMawb(m);
     setValidationWarn('');
+    setInlineHawbs([]);
     setForm({
       mawb_no: m.mawb_no, mawb_date: m.mawb_date?.slice(0, 10) || '',
       origin: m.origin, destination: m.destination,
@@ -102,6 +126,7 @@ const MawbPage: React.FC = () => {
   const openAmend = (m: Mawb) => {
     setActiveMawb(m);
     setValidationWarn('');
+    setInlineHawbs([]);
     setForm({
       mawb_no: m.mawb_no, mawb_date: m.mawb_date?.slice(0, 10) || '',
       origin: m.origin, destination: m.destination,
@@ -116,6 +141,7 @@ const MawbPage: React.FC = () => {
   const openDeleteConfirm = (m: Mawb) => {
     setActiveMawb(m);
     setValidationWarn('');
+    setInlineHawbs([]);
     setForm({
       mawb_no: m.mawb_no, mawb_date: m.mawb_date?.slice(0, 10) || '',
       origin: m.origin, destination: m.destination,
@@ -143,6 +169,50 @@ const MawbPage: React.FC = () => {
     } catch { /* ignore */ }
   };
 
+  const closeModal = () => {
+    setModalMode(null);
+    setInlineHawbs([]);
+  };
+
+  const addInlineHawbRow = () => {
+    setInlineHawbs(prev => [...prev, createInlineHawbRow(form.origin, form.destination)]);
+  };
+
+  const updateInlineHawbRow = (index: number, field: keyof InlineHawbRow, value: string) => {
+    setInlineHawbs(prev => prev.map((row, rowIndex) => (
+      rowIndex === index ? { ...row, [field]: value } : row
+    )));
+  };
+
+  const removeInlineHawbRow = (index: number) => {
+    setInlineHawbs(prev => prev.filter((_, rowIndex) => rowIndex !== index));
+  };
+
+  const normalizeInlineHawb = (row: InlineHawbRow): InlineHawbRow => ({
+    hawb_no: row.hawb_no.trim(),
+    origin: row.origin.trim().toUpperCase(),
+    destination: row.destination.trim().toUpperCase(),
+    total_packages: row.total_packages.trim(),
+    gross_weight: row.gross_weight.trim(),
+    item_description: row.item_description.trim(),
+  });
+
+  const inlineHawbHasData = (row: InlineHawbRow) => (
+    Boolean(row.hawb_no || row.total_packages || row.gross_weight || row.item_description)
+  );
+
+  const preparedInlineHawbs = inlineHawbs
+    .map(normalizeInlineHawb)
+    .filter(inlineHawbHasData);
+
+  const inlineHawbCount = preparedInlineHawbs.length;
+  const inlineHawbTotalPackages = preparedInlineHawbs.reduce((sum, row) => sum + (parseInt(row.total_packages, 10) || 0), 0);
+  const inlineHawbTotalWeight = preparedInlineHawbs.reduce((sum, row) => sum + (parseFloat(row.gross_weight) || 0), 0);
+  const showInlineTotalsWarning = inlineHawbCount > 0 && (
+    (String(form.total_packages).trim() !== '' && Number(form.total_packages) !== inlineHawbTotalPackages) ||
+    (String(form.gross_weight).trim() !== '' && Math.abs(Number(form.gross_weight) - inlineHawbTotalWeight) > 0.01)
+  );
+
   const handleSave = async () => {
     if (!form.mawb_no || !form.origin || !form.destination) {
       toast.error('MAWB No, Origin and Destination are required'); return;
@@ -150,11 +220,33 @@ const MawbPage: React.FC = () => {
     if (modalMode === 'add' && form.mawb_no.length !== 11) {
       toast.error('MAWB number must be exactly 11 digits'); return;
     }
+    if (modalMode === 'add' && preparedInlineHawbs.length > 0) {
+      const seen = new Set<string>();
+      for (let index = 0; index < preparedInlineHawbs.length; index += 1) {
+        const row = preparedInlineHawbs[index];
+        if (!row.hawb_no || !row.origin || !row.destination) {
+          toast.error(`Inline HAWB row ${index + 1} needs HAWB No, Origin and Destination`);
+          return;
+        }
+        const hawbKey = row.hawb_no.toUpperCase();
+        if (seen.has(hawbKey)) {
+          toast.error(`Duplicate HAWB No found in inline rows: ${row.hawb_no}`);
+          return;
+        }
+        seen.add(hawbKey);
+      }
+    }
     setSaving(true);
     try {
       if (modalMode === 'add') {
-        await api.post('/mawbs', form);
-        toast.success('MAWB created');
+        if (preparedInlineHawbs.length > 0) {
+          const res = await api.post('/mawbs/with-hawbs', { ...form, hawbs: preparedInlineHawbs });
+          const createdHawbs = res.data?.hawbs?.length ?? preparedInlineHawbs.length;
+          toast.success(`MAWB created with ${createdHawbs} HAWB${createdHawbs === 1 ? '' : 's'}`);
+        } else {
+          await api.post('/mawbs', form);
+          toast.success('MAWB created');
+        }
       } else if (modalMode === 'edit' && activeMawb) {
         await api.put(`/mawbs/${activeMawb.id}`, form);
         toast.success('MAWB updated');
@@ -165,7 +257,7 @@ const MawbPage: React.FC = () => {
         const res = await api.post(`/mawbs/amend/${activeMawb.id}`, form);
         toast.success(`Amended MAWB created: ${res.data.mawb_no}`);
       }
-      setModalMode(null);
+      closeModal();
       fetchMawbs();
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Save failed');
@@ -225,6 +317,50 @@ const MawbPage: React.FC = () => {
       fetchMawbs(page, pageSize, true);
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Download failed');
+    }
+  };
+
+
+  const handleDownloadSigned = async (m: Mawb) => {
+    const hawbRes = await api.get('/hawbs', { params: { mawb_id: m.id, pageSize: 1000 } });
+    const hawbs = hawbRes.data.data || [];
+    if (hawbs.length > 0) {
+      const totalPkg = hawbs.reduce((s: number, h: any) => s + Number(h.total_packages), 0);
+      const totalWt = hawbs.reduce((s: number, h: any) => s + parseFloat(h.gross_weight), 0);
+      const errors: string[] = [];
+      if (Number(m.total_packages) !== totalPkg) errors.push(`Packages mismatch: MAWB has ${m.total_packages} but HAWBs total ${totalPkg}`);
+      if (Math.abs(parseFloat(String(m.gross_weight)) - totalWt) > 0.01) errors.push(`Weight mismatch: MAWB has ${parseFloat(String(m.gross_weight)).toFixed(2)} KGS but HAWBs total ${totalWt.toFixed(2)} KGS`);
+      if (errors.length > 0) { toast.error(errors.join('\n'), { duration: 5000 }); return; }
+    }
+    const running = await isSignerRunning();
+    if (!running) { toast.error(SIGNER_SETUP_MSG, { duration: 8000 }); return; }
+    setSigningId(m.id);
+    try {
+      // Reuse the already-generated file so the control number does not increment again
+      let fileName: string;
+      let fileContent: string;
+      try {
+        const existing = await api.get(`/transmissions/latest/${m.id}`);
+        fileName = existing.data.fileName;
+        fileContent = existing.data.fileContent;
+      } catch {
+        // Not generated yet — generate now (increments control number once)
+        const fresh = await api.post(`/transmissions/generate-cgm/${m.id}`, {});
+        fileName = fresh.data.fileName;
+        fileContent = fresh.data.fileContent;
+      }
+      toast.loading('Waiting for USB token PIN...', { id: 'sign-toast' });
+      const { signature, cert } = await signCgmContent(fileContent);
+      toast.dismiss('sign-toast');
+      downloadSignedCgm(fileContent, signature, cert, fileName);
+      toast.success(`Signed file downloaded: ${fileName.replace(/\.cgm$/i, 'Signed.cgm')}`);
+      setShowTransmitted(true);
+      fetchMawbs(page, pageSize, true);
+    } catch (err: any) {
+      toast.dismiss('sign-toast');
+      toast.error(err.message || err.response?.data?.message || 'Signing failed');
+    } finally {
+      setSigningId(null);
     }
   };
 
@@ -365,6 +501,17 @@ const MawbPage: React.FC = () => {
                           {m.status !== 'transmitted' && (
                             <button className="btn-link" onClick={() => handleDownload(m)}>Download</button>
                           )}
+                          <span style={{ color: 'var(--border)' }}>|</span>
+                          <button
+                            className="btn-link"
+                            onClick={() => handleDownloadSigned(m)}
+                            disabled={signingId === m.id}
+                            title="Sign CGM via Local PKI Signer and download .p7 file"
+                          >
+                            {signingId === m.id
+                              ? <><span className="spinner" style={{ width: 10, height: 10 }}></span> Signing...</>
+                              : 'Sign'}
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -383,11 +530,11 @@ const MawbPage: React.FC = () => {
 
       {/* MAWB Modal (Add / Edit / Part / Amend) */}
       {modalMode && modalMode !== 'delete-confirm' && (
-        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setModalMode(null); }}>
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) closeModal(); }}>
           <div className="modal modal-lg">
             <div className="modal-header">
               <span className="modal-title">{modalTitle[modalMode]}</span>
-              <button className="modal-close" onClick={() => setModalMode(null)}>×</button>
+              <button className="modal-close" onClick={closeModal}>×</button>
             </div>
             <div className="modal-body">
               <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>MAWB Details</p>
@@ -489,6 +636,128 @@ const MawbPage: React.FC = () => {
                 </div>
               </div>
 
+              {modalMode === 'add' && (
+                <>
+                  <div className="divider" />
+                  <div className="flex-between" style={{ alignItems: 'flex-start', gap: 12, marginBottom: 12 }}>
+                    <div>
+                      <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
+                        Add HAWBs On This Page
+                      </p>
+                      <p className="text-muted text-sm" style={{ margin: 0 }}>
+                        Optional. You can create the MAWB and multiple HAWBs together here, or keep using the current HAWB pages.
+                      </p>
+                    </div>
+                    <button className="btn btn-secondary btn-sm" onClick={addInlineHawbRow}>+ Add HAWB</button>
+                  </div>
+
+                  {inlineHawbs.length === 0 ? (
+                    <div className="empty-state" style={{ padding: 20 }}>
+                      <div className="empty-state-title">No inline HAWBs added</div>
+                      <p>Use "+ Add HAWB" if you want to save HAWBs together with this MAWB.</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="table-wrapper" style={{ marginBottom: 0 }}>
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>#</th>
+                              <th>HAWB No.</th>
+                              <th>Origin</th>
+                              <th>Destination</th>
+                              <th>Packages</th>
+                              <th>Weight (KGS)</th>
+                              <th>Item Description</th>
+                              <th></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {inlineHawbs.map((row, index) => (
+                              <tr key={index}>
+                                <td>{index + 1}</td>
+                                <td>
+                                  <input
+                                    className="form-control font-mono"
+                                    value={row.hawb_no}
+                                    onChange={e => updateInlineHawbRow(index, 'hawb_no', e.target.value.replace(/[^a-zA-Z0-9]/g, ''))}
+                                    placeholder="House AWB"
+                                    style={{ minWidth: 120 }}
+                                  />
+                                </td>
+                                <td>
+                                  <input
+                                    className="form-control font-mono"
+                                    value={row.origin}
+                                    onChange={e => updateInlineHawbRow(index, 'origin', e.target.value.toUpperCase())}
+                                    maxLength={3}
+                                    style={{ width: 90 }}
+                                  />
+                                </td>
+                                <td>
+                                  <input
+                                    className="form-control font-mono"
+                                    value={row.destination}
+                                    onChange={e => updateInlineHawbRow(index, 'destination', e.target.value.toUpperCase())}
+                                    maxLength={3}
+                                    style={{ width: 90 }}
+                                  />
+                                </td>
+                                <td>
+                                  <input
+                                    className="form-control"
+                                    type="number"
+                                    value={row.total_packages}
+                                    onChange={e => updateInlineHawbRow(index, 'total_packages', e.target.value)}
+                                    min={0}
+                                    style={{ width: 100 }}
+                                  />
+                                </td>
+                                <td>
+                                  <input
+                                    className="form-control"
+                                    type="number"
+                                    step="0.001"
+                                    value={row.gross_weight}
+                                    onChange={e => updateInlineHawbRow(index, 'gross_weight', e.target.value)}
+                                    min={0}
+                                    style={{ width: 110 }}
+                                  />
+                                </td>
+                                <td>
+                                  <input
+                                    className="form-control"
+                                    value={row.item_description}
+                                    onChange={e => updateInlineHawbRow(index, 'item_description', e.target.value.replace(/[^a-zA-Z0-9 .,\-/]/g, ''))}
+                                    placeholder="AS PER INVOICE"
+                                    maxLength={30}
+                                    style={{ minWidth: 160 }}
+                                  />
+                                </td>
+                                <td>
+                                  <button className="btn-link danger" onClick={() => removeInlineHawbRow(index)}>Delete</button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginTop: 10, flexWrap: 'wrap', fontSize: 12 }}>
+                        <span className="text-muted">Rows ready: {inlineHawbCount}</span>
+                        <span className="text-muted">HAWB totals: {inlineHawbTotalPackages} packages / {inlineHawbTotalWeight.toFixed(3)} KGS</span>
+                      </div>
+
+                      {showInlineTotalsWarning && (
+                        <div className="alert alert-warning" style={{ marginTop: 10, fontSize: 12 }}>
+                          HAWB totals do not match the MAWB totals yet. You can still save draft data and adjust it later.
+                        </div>
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+
               {/* Flight details – shown in edit/part/amend */}
               {showFlightDetails && (
                 <>
@@ -521,7 +790,7 @@ const MawbPage: React.FC = () => {
               <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
                 {saving ? <><span className="spinner" style={{ width: 12, height: 12 }}></span> Saving...</> : 'Save'}
               </button>
-              <button className="btn btn-secondary" onClick={() => setModalMode(null)}>Cancel</button>
+              <button className="btn btn-secondary" onClick={closeModal}>Cancel</button>
             </div>
           </div>
         </div>
@@ -602,6 +871,8 @@ const MawbPage: React.FC = () => {
           </div>
         </div>
       )}
+
+
     </div>
   );
 };

@@ -5,6 +5,7 @@ import { Mawb, CgmPreview, Transmission } from '../types';
 import toast from 'react-hot-toast';
 import { fmtDateTime } from '../utils/dateUtils';
 import Pagination from '../components/Pagination';
+import { isSignerRunning, signCgmContent, downloadSignedCgm, SIGNER_SETUP_MSG } from '../utils/localSigner';
 
 const TransmissionPage: React.FC = () => {
   const [params] = useSearchParams();
@@ -19,6 +20,7 @@ const TransmissionPage: React.FC = () => {
   const [histPage, setHistPage] = useState(1);
   const [histPageSize, setHistPageSize] = useState(25);
   const [activeTab, setActiveTab] = useState<'generate' | 'history'>('generate');
+  const [signing, setSigning] = useState(false);
 
   // MAWB search
   const [mawbSearch, setMawbSearch] = useState('');
@@ -107,6 +109,54 @@ const TransmissionPage: React.FC = () => {
     }
   };
 
+  const handleSignAndDownload = async () => {
+    if (!selectedMawbId) { toast.error('Select a MAWB first'); return; }
+    const mawb = mawbs.find(m => m.id === selectedMawbId);
+    if (mawb) {
+      try {
+        const hawbRes = await api.get('/hawbs', { params: { mawb_id: selectedMawbId, pageSize: 1000 } });
+        const hawbs = hawbRes.data.data || [];
+        if (hawbs.length > 0) {
+          const totalPkg = hawbs.reduce((s: number, h: any) => s + Number(h.total_packages), 0);
+          const totalWt = hawbs.reduce((s: number, h: any) => s + parseFloat(h.gross_weight), 0);
+          const errors: string[] = [];
+          if (Number(mawb.total_packages) !== totalPkg) errors.push(`Packages mismatch: MAWB ${mawb.total_packages} ≠ HAWBs total ${totalPkg}`);
+          if (Math.abs(parseFloat(String(mawb.gross_weight)) - totalWt) > 0.01) errors.push(`Weight mismatch: MAWB ${parseFloat(String(mawb.gross_weight)).toFixed(2)} ≠ HAWBs total ${totalWt.toFixed(2)} KGS`);
+          if (errors.length > 0) { toast.error(errors.join('\n'), { duration: 5000 }); return; }
+        }
+      } catch { /* continue */ }
+    }
+    const running = await isSignerRunning();
+    if (!running) { toast.error(SIGNER_SETUP_MSG, { duration: 8000 }); return; }
+    setSigning(true);
+    try {
+      // Reuse the already-generated file so the control number does not increment again
+      let fileName: string;
+      let fileContent: string;
+      try {
+        const existing = await api.get(`/transmissions/latest/${selectedMawbId}`);
+        fileName = existing.data.fileName;
+        fileContent = existing.data.fileContent;
+      } catch {
+        // Not generated yet — generate now (increments control number once)
+        const fresh = await api.post(`/transmissions/generate-cgm/${selectedMawbId}`, {});
+        fileName = fresh.data.fileName;
+        fileContent = fresh.data.fileContent;
+      }
+      toast.loading('Waiting for USB token PIN...', { id: 'sign-toast' });
+      const { signature, cert } = await signCgmContent(fileContent);
+      toast.dismiss('sign-toast');
+      downloadSignedCgm(fileContent, signature, cert, fileName);
+      toast.success(`Signed file downloaded: ${fileName.replace(/\.cgm$/i, 'Signed.cgm')}`);
+      setHistPage(1);
+    } catch (err: any) {
+      toast.dismiss('sign-toast');
+      toast.error(err.message || err.response?.data?.message || 'Signing failed');
+    } finally {
+      setSigning(false);
+    }
+  };
+
   const selectedMawb = mawbs.find(m => m.id === selectedMawbId);
 
   return (
@@ -170,6 +220,16 @@ const TransmissionPage: React.FC = () => {
                     disabled={!selectedMawbId}
                   >
                     ⬇ Download CGM
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    onClick={handleSignAndDownload}
+                    disabled={!selectedMawbId || signing}
+                    title="Sign CGM via Local PKI Signer (USB token) and download .p7 file"
+                  >
+                    {signing
+                      ? <><span className="spinner" style={{ width: 12, height: 12 }}></span> Signing...</>
+                      : '🔏 Sign & Download'}
                   </button>
                 </div>
               </div>
@@ -284,6 +344,8 @@ const TransmissionPage: React.FC = () => {
           />
         </div>
       )}
+
+
     </div>
   );
 };
