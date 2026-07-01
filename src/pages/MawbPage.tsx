@@ -8,7 +8,7 @@ import { fmtDateTime } from '../utils/dateUtils';
 import Pagination from '../components/Pagination';
 import { isSignerRunning, signCgmContent, downloadSignedCgm, SIGNER_SETUP_MSG } from '../utils/localSigner';
 
-type ModalMode = 'add' | 'edit' | 'part' | 'amend' | 'delete-confirm' | null;
+type ModalMode = 'delete-confirm' | null;
 
 const emptyForm: MawbForm = {
   mawb_no: '', mawb_date: '', origin: '', destination: '',
@@ -16,26 +16,8 @@ const emptyForm: MawbForm = {
   flight_no: '', flight_origin_date: '', igm_no: '', igm_date: '',
 };
 
-interface InlineHawbRow {
-  hawb_no: string;
-  origin: string;
-  destination: string;
-  total_packages: string;
-  gross_weight: string;
-  item_description: string;
-}
-
-const createInlineHawbRow = (origin = '', destination = ''): InlineHawbRow => ({
-  hawb_no: '',
-  origin,
-  destination,
-  total_packages: '',
-  gross_weight: '',
-  item_description: '',
-});
-
 const MawbPage: React.FC = () => {
-  const { selectedLocation, user } = useAuth();
+  const { selectedLocation } = useAuth();
   const [mawbs, setMawbs] = useState<Mawb[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -48,9 +30,6 @@ const MawbPage: React.FC = () => {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [showTransmitted, setShowTransmitted] = useState(false);
-  // Weight/package validation warning
-  const [validationWarn, setValidationWarn] = useState('');
-  const [inlineHawbs, setInlineHawbs] = useState<InlineHawbRow[]>([]);
   const navigate = useNavigate();
 
   const fetchMawbs = useCallback(async (p = page, ps = pageSize, transmitted = showTransmitted) => {
@@ -70,78 +49,10 @@ const MawbPage: React.FC = () => {
 
   useEffect(() => { fetchMawbs(); }, [fetchMawbs]);
 
-  // Keep destination in sync whenever selectedLocation changes (add mode only)
-  useEffect(() => {
-    if (modalMode === 'add' && selectedLocation?.iata_code) {
-      const dest = selectedLocation.iata_code;
-      setForm(prev => ({ ...prev, destination: dest, customs_house_code: deriveChc(dest) }));
-    }
-  }, [selectedLocation, modalMode]); // eslint-disable-line
-
-  const openAdd = () => {
-    setActiveMawb(null);
-    setValidationWarn('');
-    setInlineHawbs([]);
-    const dest = selectedLocation?.iata_code || '';
-    setForm({
-      ...emptyForm,
-      destination: dest,
-      customs_house_code: deriveChc(dest) || selectedLocation?.customs_house_code || user?.customs_house_code || '',
-      profile_id: user?.profile_id || '',
-    });
-    setModalMode('add');
-  };
-
-  const openEdit = (m: Mawb) => {
-    setActiveMawb(m);
-    setValidationWarn('');
-    setInlineHawbs([]);
-    setForm({
-      mawb_no: m.mawb_no, mawb_date: m.mawb_date?.slice(0, 10) || '',
-      origin: m.origin, destination: m.destination,
-      total_packages: m.total_packages, gross_weight: m.gross_weight,
-      customs_house_code: m.customs_house_code || '',
-      profile_id: m.profile_id || '',
-      flight_no: m.flight_no || '', flight_origin_date: m.flight_origin_date?.slice(0, 10) || '',
-      igm_no: m.igm_no || '', igm_date: m.igm_date?.slice(0, 10) || '',
-    });
-    setModalMode('edit');
-  };
-
-  const openPart = (m: Mawb) => {
-    setActiveMawb(m);
-    setValidationWarn('');
-    setInlineHawbs([]);
-    setForm({
-      mawb_no: m.mawb_no, mawb_date: m.mawb_date?.slice(0, 10) || '',
-      origin: m.origin, destination: m.destination,
-      total_packages: m.total_packages, gross_weight: m.gross_weight,
-      customs_house_code: m.customs_house_code || '', profile_id: m.profile_id || '',
-      flight_no: m.flight_no || '', flight_origin_date: m.flight_origin_date?.slice(0, 10) || '',
-      igm_no: m.igm_no || '', igm_date: m.igm_date?.slice(0, 10) || '',
-    });
-    setModalMode('part');
-  };
-
-  const openAmend = (m: Mawb) => {
-    setActiveMawb(m);
-    setValidationWarn('');
-    setInlineHawbs([]);
-    setForm({
-      mawb_no: m.mawb_no, mawb_date: m.mawb_date?.slice(0, 10) || '',
-      origin: m.origin, destination: m.destination,
-      total_packages: m.total_packages, gross_weight: m.gross_weight,
-      customs_house_code: m.customs_house_code || '', profile_id: m.profile_id || '',
-      flight_no: m.flight_no || '', flight_origin_date: m.flight_origin_date?.slice(0, 10) || '',
-      igm_no: m.igm_no || '', igm_date: m.igm_date?.slice(0, 10) || '',
-    });
-    setModalMode('amend');
-  };
+  const f = (k: keyof MawbForm, v: string) => setForm(p => ({ ...p, [k]: v }));
 
   const openDeleteConfirm = (m: Mawb) => {
     setActiveMawb(m);
-    setValidationWarn('');
-    setInlineHawbs([]);
     setForm({
       mawb_no: m.mawb_no, mawb_date: m.mawb_date?.slice(0, 10) || '',
       origin: m.origin, destination: m.destination,
@@ -151,117 +62,6 @@ const MawbPage: React.FC = () => {
       igm_no: m.igm_no || '', igm_date: m.igm_date?.slice(0, 10) || '',
     });
     setModalMode('delete-confirm');
-  };
-
-  // Validate HAWB totals vs MAWB when weight/packages change
-  const checkHawbValidation = async (mawbId: string | undefined, mawbPkgs: string | number, mawbWt: string | number) => {
-    if (!mawbId) return;
-    try {
-      const res = await api.get('/hawbs', { params: { mawb_id: mawbId, pageSize: 1000 } });
-      const hawbs = res.data.data || [];
-      if (hawbs.length === 0) { setValidationWarn(''); return; }
-      const totalPkg = hawbs.reduce((s: number, h: any) => s + Number(h.total_packages), 0);
-      const totalWt = hawbs.reduce((s: number, h: any) => s + parseFloat(h.gross_weight), 0);
-      const warnings: string[] = [];
-      if (Number(mawbPkgs) !== totalPkg) warnings.push(`MAWB packages (${mawbPkgs}) ≠ HAWB total packages (${totalPkg})`);
-      if (Math.abs(parseFloat(String(mawbWt)) - totalWt) > 0.01) warnings.push(`MAWB weight (${mawbWt}) ≠ HAWB total weight (${totalWt.toFixed(2)})`);
-      setValidationWarn(warnings.join(' | '));
-    } catch { /* ignore */ }
-  };
-
-  const closeModal = () => {
-    setModalMode(null);
-    setInlineHawbs([]);
-  };
-
-  const addInlineHawbRow = () => {
-    setInlineHawbs(prev => [...prev, createInlineHawbRow(form.origin, form.destination)]);
-  };
-
-  const updateInlineHawbRow = (index: number, field: keyof InlineHawbRow, value: string) => {
-    setInlineHawbs(prev => prev.map((row, rowIndex) => (
-      rowIndex === index ? { ...row, [field]: value } : row
-    )));
-  };
-
-  const removeInlineHawbRow = (index: number) => {
-    setInlineHawbs(prev => prev.filter((_, rowIndex) => rowIndex !== index));
-  };
-
-  const normalizeInlineHawb = (row: InlineHawbRow): InlineHawbRow => ({
-    hawb_no: row.hawb_no.trim(),
-    origin: row.origin.trim().toUpperCase(),
-    destination: row.destination.trim().toUpperCase(),
-    total_packages: row.total_packages.trim(),
-    gross_weight: row.gross_weight.trim(),
-    item_description: row.item_description.trim(),
-  });
-
-  const inlineHawbHasData = (row: InlineHawbRow) => (
-    Boolean(row.hawb_no || row.total_packages || row.gross_weight || row.item_description)
-  );
-
-  const preparedInlineHawbs = inlineHawbs
-    .map(normalizeInlineHawb)
-    .filter(inlineHawbHasData);
-
-  const inlineHawbCount = preparedInlineHawbs.length;
-  const inlineHawbTotalPackages = preparedInlineHawbs.reduce((sum, row) => sum + (parseInt(row.total_packages, 10) || 0), 0);
-  const inlineHawbTotalWeight = preparedInlineHawbs.reduce((sum, row) => sum + (parseFloat(row.gross_weight) || 0), 0);
-  const showInlineTotalsWarning = inlineHawbCount > 0 && (
-    (String(form.total_packages).trim() !== '' && Number(form.total_packages) !== inlineHawbTotalPackages) ||
-    (String(form.gross_weight).trim() !== '' && Math.abs(Number(form.gross_weight) - inlineHawbTotalWeight) > 0.01)
-  );
-
-  const handleSave = async () => {
-    if (!form.mawb_no || !form.origin || !form.destination) {
-      toast.error('MAWB No, Origin and Destination are required'); return;
-    }
-    if (modalMode === 'add' && form.mawb_no.length !== 11) {
-      toast.error('MAWB number must be exactly 11 digits'); return;
-    }
-    if (modalMode === 'add' && preparedInlineHawbs.length > 0) {
-      const seen = new Set<string>();
-      for (let index = 0; index < preparedInlineHawbs.length; index += 1) {
-        const row = preparedInlineHawbs[index];
-        if (!row.hawb_no || !row.origin || !row.destination) {
-          toast.error(`Inline HAWB row ${index + 1} needs HAWB No, Origin and Destination`);
-          return;
-        }
-        const hawbKey = row.hawb_no.toUpperCase();
-        if (seen.has(hawbKey)) {
-          toast.error(`Duplicate HAWB No found in inline rows: ${row.hawb_no}`);
-          return;
-        }
-        seen.add(hawbKey);
-      }
-    }
-    setSaving(true);
-    try {
-      if (modalMode === 'add') {
-        if (preparedInlineHawbs.length > 0) {
-          const res = await api.post('/mawbs/with-hawbs', { ...form, hawbs: preparedInlineHawbs });
-          const createdHawbs = res.data?.hawbs?.length ?? preparedInlineHawbs.length;
-          toast.success(`MAWB created with ${createdHawbs} HAWB${createdHawbs === 1 ? '' : 's'}`);
-        } else {
-          await api.post('/mawbs', form);
-          toast.success('MAWB created');
-        }
-      } else if (modalMode === 'edit' && activeMawb) {
-        await api.put(`/mawbs/${activeMawb.id}`, form);
-        toast.success('MAWB updated');
-      } else if (modalMode === 'part' && activeMawb) {
-        const res = await api.post(`/mawbs/part/${activeMawb.id}`, form);
-        toast.success(`Part MAWB created: ${res.data.mawb_no}`);
-      } else if (modalMode === 'amend' && activeMawb) {
-        const res = await api.post(`/mawbs/amend/${activeMawb.id}`, form);
-        toast.success(`Amended MAWB created: ${res.data.mawb_no}`);
-      }
-      closeModal();
-      fetchMawbs();
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Save failed');
-    } finally { setSaving(false); }
   };
 
   const handlePermanentDelete = async () => {
@@ -298,10 +98,7 @@ const MawbPage: React.FC = () => {
       const errors: string[] = [];
       if (Number(m.total_packages) !== totalPkg) errors.push(`Packages mismatch: MAWB has ${m.total_packages} but HAWBs total ${totalPkg}`);
       if (Math.abs(parseFloat(String(m.gross_weight)) - totalWt) > 0.01) errors.push(`Weight mismatch: MAWB has ${parseFloat(String(m.gross_weight)).toFixed(2)} KGS but HAWBs total ${totalWt.toFixed(2)} KGS`);
-      if (errors.length > 0) {
-        toast.error(errors.join('\n'), { duration: 5000 });
-        return;
-      }
+      if (errors.length > 0) { toast.error(errors.join('\n'), { duration: 5000 }); return; }
     }
     try {
       const res = await api.post(`/transmissions/generate-cgm/${m.id}`, {});
@@ -320,7 +117,6 @@ const MawbPage: React.FC = () => {
     }
   };
 
-
   const handleDownloadSigned = async (m: Mawb) => {
     const hawbRes = await api.get('/hawbs', { params: { mawb_id: m.id, pageSize: 1000 } });
     const hawbs = hawbRes.data.data || [];
@@ -336,7 +132,6 @@ const MawbPage: React.FC = () => {
     if (!running) { toast.error(SIGNER_SETUP_MSG, { duration: 8000 }); return; }
     setSigningId(m.id);
     try {
-      // Reuse the already-generated file so the control number does not increment again
       let fileName: string;
       let fileContent: string;
       try {
@@ -344,7 +139,6 @@ const MawbPage: React.FC = () => {
         fileName = existing.data.fileName;
         fileContent = existing.data.fileContent;
       } catch {
-        // Not generated yet — generate now (increments control number once)
         const fresh = await api.post(`/transmissions/generate-cgm/${m.id}`, {});
         fileName = fresh.data.fileName;
         fileContent = fresh.data.fileContent;
@@ -364,21 +158,6 @@ const MawbPage: React.FC = () => {
     }
   };
 
-  // Auto-derive Customs House Code from destination: IN{DEST}4 e.g. DEL → INDEL4
-  const deriveChc = (dest: string) =>
-    dest.length >= 3 ? `IN${dest.substring(0, 3).toUpperCase()}4` : '';
-
-  const f = (k: keyof MawbForm, v: string) => {
-    setForm(p => {
-      const updated = { ...p, [k]: v };
-      // Auto-fill customs_house_code when destination changes
-      if (k === 'destination') {
-        updated.customs_house_code = deriveChc(v);
-      }
-      return updated;
-    });
-  };
-
   const isFreshMawb = (mawbNo: string) => !/-[APD]\d/.test(mawbNo);
 
   const msgTypeBadge = (t?: string) => {
@@ -392,17 +171,6 @@ const MawbPage: React.FC = () => {
     return <span className={`badge ${map[s] || 'badge-gray'}`}>{s}</span>;
   };
 
-  // Flight details shown in edit/part/amend only (delete-confirm has its own layout)
-  const showFlightDetails = modalMode === 'edit' || modalMode === 'part' || modalMode === 'amend';
-  const mawbNoDisabled = modalMode === 'edit';
-
-  const modalTitle: Record<string, string> = {
-    add: 'Add New MAWB', edit: 'Edit MAWB',
-    part: `Part MAWB — ${activeMawb?.mawb_no}`,
-    amend: `Amend MAWB — ${activeMawb?.mawb_no}`,
-    'delete-confirm': `Delete MAWB — ${activeMawb?.mawb_no}`,
-  };
-
   return (
     <div className="page-container">
       <div className="flex-between mb-16">
@@ -410,7 +178,7 @@ const MawbPage: React.FC = () => {
           <h1 className="page-title">Master Airway Bills (MAWB)</h1>
           <p className="page-subtitle">Manage consol master airway bills for ICES 1.5 CGM transmission</p>
         </div>
-        <button className="btn btn-primary" onClick={openAdd}>+ Add New MAWB</button>
+        <button className="btn btn-primary" onClick={() => navigate('/mawb/new')}>+ Add New MAWB</button>
       </div>
 
       <div className="card">
@@ -486,13 +254,13 @@ const MawbPage: React.FC = () => {
                       <td className="text-muted text-sm">{fmtDateTime(m.transmission_date)}</td>
                       <td>
                         <div className="td-actions">
-                          <button className="btn-link" onClick={() => openEdit(m)}>Edit</button>
+                          <button className="btn-link" onClick={() => navigate(`/mawb/${m.id}/edit`)}>Edit</button>
                           {isFreshMawb(m.mawb_no) && (
                             <>
                               <span style={{ color: 'var(--border)' }}>|</span>
-                              <button className="btn-link" onClick={() => openPart(m)}>Part</button>
+                              <button className="btn-link" onClick={() => navigate(`/mawb/${m.id}/part`)}>Part</button>
                               <span style={{ color: 'var(--border)' }}>|</span>
-                              <button className="btn-link" onClick={() => openAmend(m)}>Amend</button>
+                              <button className="btn-link" onClick={() => navigate(`/mawb/${m.id}/amend`)}>Amend</button>
                             </>
                           )}
                           <span style={{ color: 'var(--border)' }}>|</span>
@@ -528,275 +296,7 @@ const MawbPage: React.FC = () => {
         </div>
       </div>
 
-      {/* MAWB Modal (Add / Edit / Part / Amend) */}
-      {modalMode && modalMode !== 'delete-confirm' && (
-        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) closeModal(); }}>
-          <div className="modal modal-lg">
-            <div className="modal-header">
-              <span className="modal-title">{modalTitle[modalMode]}</span>
-              <button className="modal-close" onClick={closeModal}>×</button>
-            </div>
-            <div className="modal-body">
-              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>MAWB Details</p>
-
-              {/* Validation warning */}
-              {validationWarn && (
-                <div className="alert alert-warning" style={{ marginBottom: 10, fontSize: 12 }}>
-                  ⚠️ {validationWarn}
-                </div>
-              )}
-
-              <div className="form-group" style={{ maxWidth: 280 }}>
-                <div className="form-group">
-                  <label className="form-label">Master AWB No. <span className="required">*</span></label>
-                  <input
-                    className="form-control font-mono"
-                    value={form.mawb_no}
-                    onChange={e => {
-                      const max = modalMode === 'add' ? 11 : 20;
-                      const clean = e.target.value.replace(/[^0-9]/g, '');
-                      if (clean.length <= max) f('mawb_no', clean);
-                    }}
-                    placeholder="e.g. 12345678901"
-                    maxLength={modalMode === 'add' ? 11 : 20}
-                    disabled={mawbNoDisabled}
-                    style={mawbNoDisabled ? { background: '#f1f5f9' } : {}}
-                  />
-                  {modalMode === 'add' && (
-                    <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                      Max 11 digits ({form.mawb_no.length}/11)
-                    </p>
-                  )}
-                  {(modalMode === 'part' || modalMode === 'amend') && (
-                    <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                      New number will be: {form.mawb_no}-{modalMode === 'part' ? 'P' : 'A'}
-                    </p>
-                  )}
-                </div>
-              </div>
-              <div className="form-row form-row-3">
-                <div className="form-group">
-                  <label className="form-label">Port Of Origin <span className="required">*</span></label>
-                  {/* Always text input — user types/edits directly */}
-                  <input
-                    className="form-control font-mono"
-                    value={form.origin}
-                    onChange={e => f('origin', e.target.value.toUpperCase())}
-                    placeholder="e.g. DXB"
-                    maxLength={3}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Port Of Destination <span className="required">*</span></label>
-                  {modalMode === 'add' ? (
-                    <input
-                      className="form-control font-mono"
-                      value={form.destination}
-                      disabled
-                      style={{ background: '#f1f5f9', cursor: 'not-allowed' }}
-                      title="Auto-filled from selected login location"
-                    />
-                  ) : (
-                    <input
-                      className="form-control font-mono"
-                      value={form.destination}
-                      onChange={e => f('destination', e.target.value.toUpperCase())}
-                      placeholder="e.g. DEL"
-                      maxLength={3}
-                    />
-                  )}
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Item Description</label>
-                  <input className="form-control" value="CONSOL" disabled style={{ background: '#f1f5f9', fontWeight: 600 }} />
-                </div>
-              </div>
-              <div className="form-row form-row-2">
-                <div className="form-group">
-                  <label className="form-label">Total Packages</label>
-                  <input
-                    className="form-control" type="number" value={form.total_packages}
-                    onChange={e => {
-                      f('total_packages', e.target.value);
-                      if (modalMode === 'edit') checkHawbValidation(activeMawb?.id, e.target.value, form.gross_weight);
-                    }}
-                    min={0}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Gross Weight (KGS)</label>
-                  <input
-                    className="form-control" type="number" step="0.001" value={form.gross_weight}
-                    onChange={e => {
-                      f('gross_weight', e.target.value);
-                      if (modalMode === 'edit') checkHawbValidation(activeMawb?.id, form.total_packages, e.target.value);
-                    }}
-                    min={0}
-                  />
-                </div>
-              </div>
-
-              {modalMode === 'add' && (
-                <>
-                  <div className="divider" />
-                  <div className="flex-between" style={{ alignItems: 'flex-start', gap: 12, marginBottom: 12 }}>
-                    <div>
-                      <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
-                        Add HAWBs On This Page
-                      </p>
-                      <p className="text-muted text-sm" style={{ margin: 0 }}>
-                        Optional. You can create the MAWB and multiple HAWBs together here, or keep using the current HAWB pages.
-                      </p>
-                    </div>
-                    <button className="btn btn-secondary btn-sm" onClick={addInlineHawbRow}>+ Add HAWB</button>
-                  </div>
-
-                  {inlineHawbs.length === 0 ? (
-                    <div className="empty-state" style={{ padding: 20 }}>
-                      <div className="empty-state-title">No inline HAWBs added</div>
-                      <p>Use "+ Add HAWB" if you want to save HAWBs together with this MAWB.</p>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="table-wrapper" style={{ marginBottom: 0 }}>
-                        <table>
-                          <thead>
-                            <tr>
-                              <th>#</th>
-                              <th>HAWB No.</th>
-                              <th>Origin</th>
-                              <th>Destination</th>
-                              <th>Packages</th>
-                              <th>Weight (KGS)</th>
-                              <th>Item Description</th>
-                              <th></th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {inlineHawbs.map((row, index) => (
-                              <tr key={index}>
-                                <td>{index + 1}</td>
-                                <td>
-                                  <input
-                                    className="form-control font-mono"
-                                    value={row.hawb_no}
-                                    onChange={e => updateInlineHawbRow(index, 'hawb_no', e.target.value.replace(/[^a-zA-Z0-9]/g, ''))}
-                                    placeholder="House AWB"
-                                    style={{ minWidth: 120 }}
-                                  />
-                                </td>
-                                <td>
-                                  <input
-                                    className="form-control font-mono"
-                                    value={row.origin}
-                                    onChange={e => updateInlineHawbRow(index, 'origin', e.target.value.toUpperCase())}
-                                    maxLength={3}
-                                    style={{ width: 90 }}
-                                  />
-                                </td>
-                                <td>
-                                  <input
-                                    className="form-control font-mono"
-                                    value={row.destination}
-                                    onChange={e => updateInlineHawbRow(index, 'destination', e.target.value.toUpperCase())}
-                                    maxLength={3}
-                                    style={{ width: 90 }}
-                                  />
-                                </td>
-                                <td>
-                                  <input
-                                    className="form-control"
-                                    type="number"
-                                    value={row.total_packages}
-                                    onChange={e => updateInlineHawbRow(index, 'total_packages', e.target.value)}
-                                    min={0}
-                                    style={{ width: 100 }}
-                                  />
-                                </td>
-                                <td>
-                                  <input
-                                    className="form-control"
-                                    type="number"
-                                    step="0.001"
-                                    value={row.gross_weight}
-                                    onChange={e => updateInlineHawbRow(index, 'gross_weight', e.target.value)}
-                                    min={0}
-                                    style={{ width: 110 }}
-                                  />
-                                </td>
-                                <td>
-                                  <input
-                                    className="form-control"
-                                    value={row.item_description}
-                                    onChange={e => updateInlineHawbRow(index, 'item_description', e.target.value.replace(/[^a-zA-Z0-9 .,\-/]/g, ''))}
-                                    placeholder="AS PER INVOICE"
-                                    maxLength={30}
-                                    style={{ minWidth: 160 }}
-                                  />
-                                </td>
-                                <td>
-                                  <button className="btn-link danger" onClick={() => removeInlineHawbRow(index)}>Delete</button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-
-                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginTop: 10, flexWrap: 'wrap', fontSize: 12 }}>
-                        <span className="text-muted">Rows ready: {inlineHawbCount}</span>
-                        <span className="text-muted">HAWB totals: {inlineHawbTotalPackages} packages / {inlineHawbTotalWeight.toFixed(3)} KGS</span>
-                      </div>
-
-                      {showInlineTotalsWarning && (
-                        <div className="alert alert-warning" style={{ marginTop: 10, fontSize: 12 }}>
-                          HAWB totals do not match the MAWB totals yet. You can still save draft data and adjust it later.
-                        </div>
-                      )}
-                    </>
-                  )}
-                </>
-              )}
-
-              {/* Flight details – shown in edit/part/amend */}
-              {showFlightDetails && (
-                <>
-                  <div className="divider" />
-                  <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>Flight Details</p>
-                  <div className="form-row form-row-2">
-                    <div className="form-group">
-                      <label className="form-label">Flight No.</label>
-                      <input className="form-control" value={form.flight_no} onChange={e => f('flight_no', e.target.value)} placeholder="e.g. AI123" maxLength={15} />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Flight Date</label>
-                      <input className="form-control" type="date" value={form.flight_origin_date} onChange={e => f('flight_origin_date', e.target.value)} />
-                    </div>
-                  </div>
-                  <div className="form-row form-row-2">
-                    <div className="form-group">
-                      <label className="form-label">IGM No.</label>
-                      <input className="form-control" value={form.igm_no} onChange={e => f('igm_no', e.target.value)} placeholder="Enter IGM No" maxLength={7} />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">IGM Date</label>
-                      <input className="form-control" type="date" value={form.igm_date} onChange={e => f('igm_date', e.target.value)} />
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-                {saving ? <><span className="spinner" style={{ width: 12, height: 12 }}></span> Saving...</> : 'Save'}
-              </button>
-              <button className="btn btn-secondary" onClick={closeModal}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Confirm Dialog — shows MAWB + flight details + delete options */}
+      {/* Delete Confirm Dialog */}
       {modalMode === 'delete-confirm' && activeMawb && (
         <div className="modal-overlay">
           <div className="modal" style={{ maxWidth: 560 }}>
@@ -805,7 +305,6 @@ const MawbPage: React.FC = () => {
               <button className="modal-close" onClick={() => setModalMode(null)}>×</button>
             </div>
             <div className="modal-body">
-              {/* MAWB summary */}
               <div style={{ background: '#f8fafc', borderRadius: 6, padding: '10px 14px', marginBottom: 14, fontSize: 12 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px' }}>
                   <div><span className="text-muted">MAWB No:</span> <strong className="font-mono">{activeMawb.mawb_no}</strong></div>
@@ -815,7 +314,6 @@ const MawbPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Flight details for Delete & Copy */}
               <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 14, marginBottom: 14 }}>
                 <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>
                   Flight Details (for Delete Copy)
@@ -871,8 +369,6 @@ const MawbPage: React.FC = () => {
           </div>
         </div>
       )}
-
-
     </div>
   );
 };

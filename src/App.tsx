@@ -9,6 +9,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 // Pages
 import Login from './pages/Login';
 import MawbPage from './pages/MawbPage';
+import MawbFormPage from './pages/MawbFormPage';
 import HawbPage from './pages/HawbPage';
 import MultipleHawbPage from './pages/MultipleHawbPage';
 import TransmissionPage from './pages/TransmissionPage';
@@ -64,6 +65,10 @@ const AppRoutes: React.FC = () => {
 
         {/* MAWB */}
         <Route path="/mawb" element={<ProtectedRoute><MawbPage /></ProtectedRoute>} />
+        <Route path="/mawb/new" element={<ProtectedRoute><MawbFormPage /></ProtectedRoute>} />
+        <Route path="/mawb/:id/edit" element={<ProtectedRoute><MawbFormPage /></ProtectedRoute>} />
+        <Route path="/mawb/:id/amend" element={<ProtectedRoute><MawbFormPage /></ProtectedRoute>} />
+        <Route path="/mawb/:id/part" element={<ProtectedRoute><MawbFormPage /></ProtectedRoute>} />
 
         {/* HAWB */}
         <Route path="/hawb" element={<ProtectedRoute><HawbPage /></ProtectedRoute>} />
