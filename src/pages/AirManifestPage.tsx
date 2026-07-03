@@ -602,7 +602,7 @@ const AirManifestPage: React.FC = () => {
             </div>
             <div className="modal-body">
               <div className="form-row form-row-3">
-                <div className="form-group"><label className="form-label">Flight No. <span className="required">*</span></label><input className="form-control font-mono" value={igmFlightForm.flight_no} onChange={e => fif('flight_no', e.target.value)} placeholder="e.g. AI123" /></div>
+                <div className="form-group"><label className="form-label">Flight No. <span className="required">*</span></label><input className="form-control font-mono" value={igmFlightForm.flight_no} onChange={e => fif('flight_no', e.target.value.toUpperCase())} placeholder="e.g. AI123" /></div>
                 <div className="form-group"><label className="form-label">Origin Date <span className="required">*</span></label><input className="form-control" type="date" value={igmFlightForm.flight_origin_date} onChange={e => fif('flight_origin_date', e.target.value)} /></div>
                 <div className="form-group"><label className="form-label">Expected Arrival</label><input className="form-control" type="datetime-local" value={igmFlightForm.expected_arrival} onChange={e => fif('expected_arrival', e.target.value)} /></div>
               </div>
@@ -614,7 +614,7 @@ const AirManifestPage: React.FC = () => {
               <div className="form-row form-row-4">
                 <div className="form-group"><label className="form-label">Customs House Code</label><input className="form-control font-mono" value={igmFlightForm.customs_house_code} onChange={e => fif('customs_house_code', e.target.value)} placeholder="INDEL4" maxLength={6} /></div>
                 <div className="form-group"><label className="form-label">Registration No.</label><input className="form-control" value={igmFlightForm.registration_no} onChange={e => fif('registration_no', e.target.value)} maxLength={10} /></div>
-                <div className="form-group"><label className="form-label">IGM No.</label><input className="form-control font-mono" value={igmFlightForm.igm_no} onChange={e => fif('igm_no', e.target.value)} maxLength={7} /></div>
+                <div className="form-group"><label className="form-label">IGM No.</label><input className="form-control font-mono" value={igmFlightForm.igm_no} onChange={e => fif('igm_no', e.target.value.toUpperCase())} maxLength={7} /></div>
                 <div className="form-group"><label className="form-label">IGM Date</label><input className="form-control" type="date" value={igmFlightForm.igm_date} onChange={e => fif('igm_date', e.target.value)} /></div>
               </div>
             </div>
@@ -673,7 +673,7 @@ const AirManifestPage: React.FC = () => {
             </div>
             <div className="modal-body">
               <div className="form-row form-row-3">
-                <div className="form-group"><label className="form-label">Flight No. <span className="required">*</span></label><input className="form-control font-mono" value={egmFlightForm.flight_no} onChange={e => fef('flight_no', e.target.value)} placeholder="e.g. AI456" /></div>
+                <div className="form-group"><label className="form-label">Flight No. <span className="required">*</span></label><input className="form-control font-mono" value={egmFlightForm.flight_no} onChange={e => fef('flight_no', e.target.value.toUpperCase())} placeholder="e.g. AI456" /></div>
                 <div className="form-group"><label className="form-label">Departure Date <span className="required">*</span></label><input className="form-control" type="date" value={egmFlightForm.flight_departure_date} onChange={e => fef('flight_departure_date', e.target.value)} /></div>
                 <div className="form-group"><label className="form-label">Nil Cargo</label><select className="form-control" value={egmFlightForm.nil_cargo} onChange={e => fef('nil_cargo', e.target.value)}><option value="N">N – Has Cargo</option><option value="Y">Y – Nil Cargo</option></select></div>
               </div>

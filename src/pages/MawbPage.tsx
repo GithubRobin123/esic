@@ -66,13 +66,17 @@ const MawbPage: React.FC = () => {
 
   const handlePermanentDelete = async () => {
     if (!activeMawb) return;
+    if (activeMawb.status !== 'draft') {
+      toast.error('Cannot permanently delete a transmitted MAWB. Use Delete & Copy instead.');
+      return;
+    }
     setSaving(true);
     try {
       await api.delete(`/mawbs/${activeMawb.id}`);
       toast.success('MAWB permanently deleted');
       setModalMode(null);
       fetchMawbs();
-    } catch { toast.error('Delete failed'); }
+    } catch (err: any) { toast.error(err.response?.data?.message || 'Delete failed'); }
     finally { setSaving(false); }
   };
 
@@ -321,7 +325,7 @@ const MawbPage: React.FC = () => {
                 <div className="form-row form-row-2" style={{ marginBottom: 8 }}>
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label className="form-label">Flight No.</label>
-                    <input className="form-control" value={form.flight_no} onChange={e => f('flight_no', e.target.value)} placeholder="e.g. AI123" maxLength={15} />
+                    <input className="form-control" value={form.flight_no} onChange={e => f('flight_no', e.target.value.toUpperCase())} placeholder="e.g. AI123" maxLength={15} />
                   </div>
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label className="form-label">Flight Date</label>
@@ -331,7 +335,7 @@ const MawbPage: React.FC = () => {
                 <div className="form-row form-row-2">
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label className="form-label">IGM No.</label>
-                    <input className="form-control" value={form.igm_no} onChange={e => f('igm_no', e.target.value)} placeholder="Enter IGM No" maxLength={7} />
+                    <input className="form-control" value={form.igm_no} onChange={e => f('igm_no', e.target.value.toUpperCase())} placeholder="Enter IGM No" maxLength={7} />
                   </div>
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label className="form-label">IGM Date</label>
@@ -345,9 +349,17 @@ const MawbPage: React.FC = () => {
                 <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 14 }}>
                   <div style={{ fontWeight: 600, marginBottom: 4 }}>1. Permanent Delete</div>
                   <p className="text-muted text-sm" style={{ marginBottom: 12 }}>
-                    Completely removes this MAWB and all its HAWBs. Cannot be undone.
+                    {activeMawb.status === 'draft'
+                      ? 'Completely removes this MAWB and all its HAWBs. Cannot be undone.'
+                      : 'This MAWB has already been transmitted and can no longer be permanently deleted. Use Delete & Copy instead.'}
                   </p>
-                  <button className="btn btn-sm" style={{ background: '#ef4444', color: '#fff' }} onClick={handlePermanentDelete} disabled={saving}>
+                  <button
+                    className="btn btn-sm"
+                    style={{ background: '#ef4444', color: '#fff' }}
+                    onClick={handlePermanentDelete}
+                    disabled={saving || activeMawb.status !== 'draft'}
+                    title={activeMawb.status !== 'draft' ? 'Transmitted MAWBs cannot be permanently deleted' : ''}
+                  >
                     Permanently Delete
                   </button>
                 </div>

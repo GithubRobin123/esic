@@ -421,7 +421,7 @@ const MawbFormPage: React.FC = () => {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 16 }}>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">IGM No.</label>
-                  <input className="form-control" value={form.igm_no} onChange={e => f('igm_no', e.target.value)} placeholder="Enter IGM No" maxLength={7} />
+                  <input className="form-control" value={form.igm_no} onChange={e => f('igm_no', e.target.value.toUpperCase())} placeholder="Enter IGM No" maxLength={7} />
                 </div>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">IGM Date</label>
@@ -429,7 +429,7 @@ const MawbFormPage: React.FC = () => {
                 </div>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">Flight No.</label>
-                  <input className="form-control" value={form.flight_no} onChange={e => f('flight_no', e.target.value)} placeholder="e.g. AI123" maxLength={15} />
+                  <input className="form-control" value={form.flight_no} onChange={e => f('flight_no', e.target.value.toUpperCase())} placeholder="e.g. AI123" maxLength={15} />
                 </div>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">Flight Date</label>
