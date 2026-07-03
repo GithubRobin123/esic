@@ -4,6 +4,7 @@ import api from '../utils/api';
 import { Mawb } from '../types';
 import toast from 'react-hot-toast';
 import { useAuth } from '../hooks/useAuth';
+import { sanitizeDecimal } from '../utils/numberUtils';
 
 interface HawbRow {
   id?: string;          // present for existing HAWBs
@@ -35,7 +36,7 @@ const MultipleHawbPage: React.FC = () => {
         status: 'draft',
         ...(selectedLocation?.customs_house_code ? { customs_house_code: selectedLocation.customs_house_code } : {}),
       }
-    }).then(r => setMawbs(r.data.data ?? [])).catch(() => {});
+    }).then(r => setMawbs((r.data.data ?? []).filter((m: Mawb) => m.message_type !== 'A'))).catch(() => {});
   }, [selectedLocation?.customs_house_code]); // eslint-disable-line
 
   const selectedMawb = mawbs.find(m => m.id === selectedMawbId);
@@ -280,7 +281,7 @@ const MultipleHawbPage: React.FC = () => {
                         <input
                           className="form-control font-mono"
                           value={row.hawb_no}
-                          onChange={e => updateRow(idx, 'hawb_no', e.target.value)}
+                          onChange={e => updateRow(idx, 'hawb_no', e.target.value.toUpperCase())}
                           placeholder="ENTER HOUSE NO"
                           style={{ minWidth: 120 }}
                         />
@@ -318,12 +319,11 @@ const MultipleHawbPage: React.FC = () => {
                         <input
                           className="form-control"
                           style={{ width: 100 }}
-                          type="number"
-                          step="0.01"
+                          type="text"
+                          inputMode="decimal"
                           value={row.gross_weight}
-                          onChange={e => updateRow(idx, 'gross_weight', e.target.value)}
+                          onChange={e => updateRow(idx, 'gross_weight', sanitizeDecimal(e.target.value))}
                           placeholder="Weight"
-                          min={0}
                         />
                       </td>
                       <td>
@@ -331,7 +331,7 @@ const MultipleHawbPage: React.FC = () => {
                           className="form-control"
                           style={{ minWidth: 160 }}
                           value={row.item_description}
-                          onChange={e => updateRow(idx, 'item_description', e.target.value)}
+                          onChange={e => updateRow(idx, 'item_description', e.target.value.toUpperCase())}
                           placeholder="DESCRIPTION"
                           maxLength={100}
                         />

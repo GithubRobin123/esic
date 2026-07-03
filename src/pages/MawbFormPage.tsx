@@ -3,12 +3,23 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import api from '../utils/api';
 import { MawbForm } from '../types';
 import { useAuth } from '../hooks/useAuth';
+import { sanitizeDecimal } from '../utils/numberUtils';
 import toast from 'react-hot-toast';
 
 type FormMode = 'add' | 'edit' | 'part' | 'amend';
 
 interface InlineHawbRow {
   hawb_no: string;
+  total_packages: string;
+  gross_weight: string;
+  item_description: string;
+}
+
+interface ExistingHawbRow {
+  id: string;
+  hawb_no: string;
+  origin: string;
+  destination: string;
   total_packages: string;
   gross_weight: string;
   item_description: string;
@@ -48,9 +59,12 @@ const MawbFormPage: React.FC = () => {
   const [inlineHawbs, setInlineHawbs] = useState<InlineHawbRow[]>([emptyHawbRow()]);
   const [hawbCount, setHawbCount] = useState(1);
   const [activeMawbNo, setActiveMawbNo] = useState('');
+  const [existingHawbs, setExistingHawbs] = useState<ExistingHawbRow[]>([]);
 
   const isAdd = mode === 'add';
   const showFlightDetails = mode === 'edit' || mode === 'part' || mode === 'amend';
+  // Part is treated like a fresh MAWB — new HAWBs can be added inline
+  const showNewHawbSection = isAdd || mode === 'part';
 
   // Load existing MAWB for edit/part/amend
   const fetchMawb = useCallback(async () => {
@@ -74,13 +88,28 @@ const MawbFormPage: React.FC = () => {
         igm_no: m.igm_no || '',
         igm_date: m.igm_date?.slice(0, 10) || '',
       });
+
+      // Amend: load the parent's existing HAWBs so they can be carried into the amendment (editable, but numbers fixed)
+      if (location.pathname.endsWith('/amend')) {
+        const hres = await api.get('/hawbs', { params: { mawb_id: id, pageSize: 1000 } });
+        const rows: ExistingHawbRow[] = (hres.data.data || []).map((h: any) => ({
+          id: h.id,
+          hawb_no: h.hawb_no,
+          origin: h.origin,
+          destination: h.destination,
+          total_packages: String(h.total_packages),
+          gross_weight: String(h.gross_weight),
+          item_description: h.item_description || '',
+        }));
+        setExistingHawbs(rows);
+      }
     } catch {
       toast.error('Failed to load MAWB');
       navigate('/mawb');
     } finally {
       setLoading(false);
     }
-  }, [id, navigate]);
+  }, [id, navigate, location.pathname]);
 
   useEffect(() => {
     if (mode !== 'add') {
@@ -142,6 +171,18 @@ const MawbFormPage: React.FC = () => {
     setInlineHawbs(prev => prev.map((row, i) => i === index ? { ...row, [field]: value } : row));
   };
 
+  // Amend: existing HAWBs are editable (packages/weight/description/route), but HAWB numbers stay fixed
+  const updateExistingHawbRow = (index: number, field: keyof Omit<ExistingHawbRow, 'id' | 'hawb_no'>, value: string) => {
+    setExistingHawbs(prev => prev.map((row, i) => i === index ? { ...row, [field]: value } : row));
+  };
+
+  const existingTotalPackages = existingHawbs.reduce((s, r) => s + (parseInt(r.total_packages, 10) || 0), 0);
+  const existingTotalWeight = existingHawbs.reduce((s, r) => s + (parseFloat(r.gross_weight) || 0), 0);
+  const showExistingTotalsWarning = existingHawbs.length > 0 && (
+    (String(form.total_packages).trim() !== '' && Number(form.total_packages) !== existingTotalPackages) ||
+    (String(form.gross_weight).trim() !== '' && Math.abs(Number(form.gross_weight) - existingTotalWeight) > 0.01)
+  );
+
   const preparedHawbs = inlineHawbs
     .map(row => ({
       hawb_no: row.hawb_no.trim(),
@@ -183,7 +224,7 @@ const MawbFormPage: React.FC = () => {
       toast.error('MAWB number must be exactly 11 digits');
       return false;
     }
-    if (isAdd && preparedHawbs.length > 0) {
+    if (showNewHawbSection && preparedHawbs.length > 0) {
       const seen = new Set<string>();
       for (let i = 0; i < preparedHawbs.length; i++) {
         const row = preparedHawbs[i];
@@ -216,10 +257,28 @@ const MawbFormPage: React.FC = () => {
         toast.success('MAWB updated');
       } else if (mode === 'part' && id) {
         const res = await api.post(`/mawbs/part/${id}`, form);
-        toast.success(`Part MAWB created: ${res.data.mawb_no}`);
+        let hawbMsg = '';
+        if (preparedHawbs.length > 0) {
+          const hres = await api.post('/hawbs/batch', { mawb_id: res.data.id, hawbs: preparedHawbs });
+          const count = hres.data?.length ?? preparedHawbs.length;
+          hawbMsg = ` with ${count} HAWB${count === 1 ? '' : 's'}`;
+        }
+        toast.success(`Part MAWB created: ${res.data.mawb_no}${hawbMsg}`);
       } else if (mode === 'amend' && id) {
         const res = await api.post(`/mawbs/amend/${id}`, form);
-        toast.success(`Amended MAWB created: ${res.data.mawb_no}`);
+        const newMawbId = res.data.id;
+        for (const h of existingHawbs) {
+          await api.post(`/hawbs/amend/${h.id}`, {
+            mawb_id: newMawbId,
+            origin: h.origin,
+            destination: h.destination,
+            total_packages: h.total_packages,
+            gross_weight: h.gross_weight,
+            item_description: h.item_description,
+          });
+        }
+        const hawbMsg = existingHawbs.length > 0 ? ` with ${existingHawbs.length} HAWB${existingHawbs.length === 1 ? '' : 's'}` : '';
+        toast.success(`Amended MAWB created: ${res.data.mawb_no}${hawbMsg}`);
       }
       return true;
     } catch (err: any) {
@@ -296,8 +355,8 @@ const MawbFormPage: React.FC = () => {
                 }}
                 placeholder={isAdd ? 'e.g. 12345678901' : ''}
                 maxLength={isAdd ? 11 : 20}
-                disabled={mode === 'edit'}
-                style={mode === 'edit' ? { background: '#f1f5f9' } : {}}
+                disabled={mode !== 'add'}
+                style={mode !== 'add' ? { background: '#f1f5f9' } : {}}
               />
               {isAdd && (
                 <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
@@ -340,14 +399,14 @@ const MawbFormPage: React.FC = () => {
               <label className="form-label">Gross Weight</label>
               <input
                 className="form-control"
-                type="number"
-                step="0.001"
+                type="text"
+                inputMode="decimal"
                 value={form.gross_weight}
                 onChange={e => {
-                  f('gross_weight', e.target.value);
-                  if (mode === 'edit' && id) checkHawbValidation(id, form.total_packages, e.target.value);
+                  const clean = sanitizeDecimal(e.target.value);
+                  f('gross_weight', clean);
+                  if (mode === 'edit' && id) checkHawbValidation(id, form.total_packages, clean);
                 }}
-                min={0}
               />
             </div>
           </div>
@@ -361,14 +420,6 @@ const MawbFormPage: React.FC = () => {
               </p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 16 }}>
                 <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Flight No.</label>
-                  <input className="form-control" value={form.flight_no} onChange={e => f('flight_no', e.target.value)} placeholder="e.g. AI123" maxLength={15} />
-                </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Flight Date</label>
-                  <input className="form-control" type="date" value={form.flight_origin_date} onChange={e => f('flight_origin_date', e.target.value)} />
-                </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">IGM No.</label>
                   <input className="form-control" value={form.igm_no} onChange={e => f('igm_no', e.target.value)} placeholder="Enter IGM No" maxLength={7} />
                 </div>
@@ -376,14 +427,22 @@ const MawbFormPage: React.FC = () => {
                   <label className="form-label">IGM Date</label>
                   <input className="form-control" type="date" value={form.igm_date} onChange={e => f('igm_date', e.target.value)} />
                 </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Flight No.</label>
+                  <input className="form-control" value={form.flight_no} onChange={e => f('flight_no', e.target.value)} placeholder="e.g. AI123" maxLength={15} />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Flight Date</label>
+                  <input className="form-control" type="date" value={form.flight_origin_date} onChange={e => f('flight_origin_date', e.target.value)} />
+                </div>
               </div>
             </>
           )}
         </div>
       </div>
 
-      {/* HAWB List — add mode only */}
-      {isAdd && (
+      {/* HAWB List — add & part modes (new HAWBs can be entered; part is treated like a fresh MAWB) */}
+      {showNewHawbSection && (
         <div className="card" style={{ maxWidth: 960, marginBottom: 24 }}>
           <div style={{ padding: '14px 24px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -432,7 +491,7 @@ const MawbFormPage: React.FC = () => {
                           <input
                             className="form-control font-mono"
                             value={row.hawb_no}
-                            onChange={e => updateHawbRow(index, 'hawb_no', e.target.value.replace(/[^a-zA-Z0-9]/g, ''))}
+                            onChange={e => updateHawbRow(index, 'hawb_no', e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase())}
                             placeholder="House AWB No"
                           />
                         </td>
@@ -448,18 +507,17 @@ const MawbFormPage: React.FC = () => {
                         <td>
                           <input
                             className="form-control"
-                            type="number"
-                            step="0.001"
+                            type="text"
+                            inputMode="decimal"
                             value={row.gross_weight}
-                            onChange={e => updateHawbRow(index, 'gross_weight', e.target.value)}
-                            min={0}
+                            onChange={e => updateHawbRow(index, 'gross_weight', sanitizeDecimal(e.target.value))}
                           />
                         </td>
                         <td>
                           <input
                             className="form-control"
                             value={row.item_description}
-                            onChange={e => updateHawbRow(index, 'item_description', e.target.value.replace(/[^a-zA-Z0-9 .,\-/]/g, ''))}
+                            onChange={e => updateHawbRow(index, 'item_description', e.target.value.replace(/[^a-zA-Z0-9 .,\-/]/g, '').toUpperCase())}
                             placeholder="AS PER INVOICE"
                             maxLength={30}
                           />
@@ -484,6 +542,111 @@ const MawbFormPage: React.FC = () => {
                 </div>
 
                 {showTotalsWarning && (
+                  <div className="alert alert-warning" style={{ margin: '0 16px 12px', fontSize: 12 }}>
+                    HAWB totals do not match MAWB totals. You can save and adjust later.
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* HAWB List — amend mode: existing HAWBs carried over, editable (HAWB No fixed, no new rows) */}
+      {mode === 'amend' && (
+        <div className="card" style={{ maxWidth: 960, marginBottom: 24 }}>
+          <div style={{ padding: '14px 24px', borderBottom: '1px solid var(--border)' }}>
+            <h2 className="page-title" style={{ fontSize: 18, margin: 0 }}>HAWB List (Existing — editable)</h2>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+              These HAWBs will be carried into the amendment. You can edit details, but HAWB numbers cannot be changed. New HAWBs cannot be added in Amend.
+            </p>
+          </div>
+
+          <div className="table-wrapper" style={{ margin: 0 }}>
+            {existingHawbs.length === 0 ? (
+              <div style={{ padding: '32px 24px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                No HAWBs found on this MAWB.
+              </div>
+            ) : (
+              <>
+                <table>
+                  <thead>
+                    <tr>
+                      <th style={{ width: 40 }}>#</th>
+                      <th>HAWB NO</th>
+                      <th style={{ width: 100 }}>ORIGIN</th>
+                      <th style={{ width: 100 }}>DEST</th>
+                      <th style={{ width: 140 }}>PACKAGES</th>
+                      <th style={{ width: 140 }}>WEIGHT</th>
+                      <th>DESCRIPTION</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {existingHawbs.map((row, index) => (
+                      <tr key={row.id}>
+                        <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{index + 1}</td>
+                        <td>
+                          <input
+                            className="form-control font-mono"
+                            value={row.hawb_no}
+                            disabled
+                            style={{ background: '#f1f5f9' }}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            className="form-control"
+                            value={row.origin}
+                            onChange={e => updateExistingHawbRow(index, 'origin', e.target.value.toUpperCase())}
+                            maxLength={3}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            className="form-control"
+                            value={row.destination}
+                            onChange={e => updateExistingHawbRow(index, 'destination', e.target.value.toUpperCase())}
+                            maxLength={3}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            className="form-control"
+                            type="number"
+                            value={row.total_packages}
+                            onChange={e => updateExistingHawbRow(index, 'total_packages', e.target.value)}
+                            min={0}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            className="form-control"
+                            type="text"
+                            inputMode="decimal"
+                            value={row.gross_weight}
+                            onChange={e => updateExistingHawbRow(index, 'gross_weight', sanitizeDecimal(e.target.value))}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            className="form-control"
+                            value={row.item_description}
+                            onChange={e => updateExistingHawbRow(index, 'item_description', e.target.value.replace(/[^a-zA-Z0-9 .,\-/]/g, '').toUpperCase())}
+                            placeholder="AS PER INVOICE"
+                            maxLength={30}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                <div style={{ padding: '10px 16px', fontSize: 12, color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border)' }}>
+                  <span>HAWBs: {existingHawbs.length}</span>
+                  <span>HAWB totals: {existingTotalPackages} pkgs / {existingTotalWeight.toFixed(3)} KGS</span>
+                </div>
+
+                {showExistingTotalsWarning && (
                   <div className="alert alert-warning" style={{ margin: '0 16px 12px', fontSize: 12 }}>
                     HAWB totals do not match MAWB totals. You can save and adjust later.
                   </div>

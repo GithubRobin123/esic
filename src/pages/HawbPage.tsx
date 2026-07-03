@@ -4,6 +4,7 @@ import api from '../utils/api';
 import { Hawb, HawbForm, Mawb } from '../types';
 import toast from 'react-hot-toast';
 import { fmtDateTime } from '../utils/dateUtils';
+import { sanitizeDecimal } from '../utils/numberUtils';
 import Pagination from '../components/Pagination';
 import { useAuth } from '../hooks/useAuth';
 
@@ -82,8 +83,8 @@ const HawbPage: React.FC<HawbPageProps> = ({ initialMode }) => {
     }));
   };
 
-  // Only draft MAWBs can receive new HAWBs
-  const draftMawbs = mawbs.filter(m => m.status === 'draft');
+  // Only draft, non-Amend MAWBs can receive brand new HAWBs (Amend files may only amend existing HAWBs)
+  const draftMawbs = mawbs.filter(m => m.status === 'draft' && m.message_type !== 'A');
 
   const openAdd = () => {
     // If a specific MAWB is selected and it's transmitted, block add
@@ -91,6 +92,10 @@ const HawbPage: React.FC<HawbPageProps> = ({ initialMode }) => {
       const selected = mawbs.find(m => m.id === selectedMawbId);
       if (selected && selected.status !== 'draft') {
         toast.error('Cannot add HAWBs to a transmitted MAWB. Use Amend or Part instead.');
+        return;
+      }
+      if (selected && selected.message_type === 'A') {
+        toast.error('Cannot add new HAWBs to an Amend file. Use Amend on an existing HAWB instead.');
         return;
       }
     }
@@ -276,7 +281,13 @@ const HawbPage: React.FC<HawbPageProps> = ({ initialMode }) => {
           <button
             className="btn btn-primary btn-sm"
             onClick={openAdd}
-            title={selectedMawbId && mawbs.find(m => m.id === selectedMawbId)?.status !== 'draft' ? 'MAWB is transmitted — use Amend or Part' : ''}
+            title={
+              selectedMawbId && mawbs.find(m => m.id === selectedMawbId)?.status !== 'draft'
+                ? 'MAWB is transmitted — use Amend or Part'
+                : selectedMawbId && mawbs.find(m => m.id === selectedMawbId)?.message_type === 'A'
+                ? 'Amend file — use Amend on an existing HAWB instead'
+                : ''
+            }
           >+ Add House AWB</button>
         </div>
 
@@ -376,7 +387,7 @@ const HawbPage: React.FC<HawbPageProps> = ({ initialMode }) => {
                   <input
                     className="form-control font-mono"
                     value={form.hawb_no}
-                    onChange={e => f('hawb_no', e.target.value.replace(/[^a-zA-Z0-9]/g, ''))}
+                    onChange={e => f('hawb_no', e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase())}
                     placeholder="House AWB number"
                     disabled={modalMode === 'amend'}
                     style={modalMode === 'amend' ? { background: '#f1f5f9' } : {}}
@@ -386,11 +397,11 @@ const HawbPage: React.FC<HawbPageProps> = ({ initialMode }) => {
               <div className="form-row form-row-2">
                 <div className="form-group">
                   <label className="form-label">Port Of Origin: <span className="required">*</span></label>
-                  <input className="form-control" value={form.origin} onChange={e => f('origin', e.target.value)} placeholder="e.g. PVG" maxLength={3} />
+                  <input className="form-control" value={form.origin} onChange={e => f('origin', e.target.value.toUpperCase())} placeholder="e.g. PVG" maxLength={3} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Port Of DEST: <span className="required">*</span></label>
-                  <input className="form-control" value={form.destination} onChange={e => f('destination', e.target.value)} placeholder="e.g. BOM" maxLength={3} />
+                  <input className="form-control" value={form.destination} onChange={e => f('destination', e.target.value.toUpperCase())} placeholder="e.g. BOM" maxLength={3} />
                 </div>
               </div>
               <div className="form-row form-row-3">
@@ -400,11 +411,11 @@ const HawbPage: React.FC<HawbPageProps> = ({ initialMode }) => {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Weight (KGS):</label>
-                  <input className="form-control" type="number" step="0.001" value={form.gross_weight} onChange={e => f('gross_weight', e.target.value)} min={0} />
+                  <input className="form-control" type="text" inputMode="decimal" value={form.gross_weight} onChange={e => f('gross_weight', sanitizeDecimal(e.target.value))} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Item Description:</label>
-                  <input className="form-control" value={form.item_description} onChange={e => f('item_description', e.target.value.replace(/[^a-zA-Z0-9 .,\-/]/g, ''))} placeholder="AS PER INVOICE" maxLength={30} />
+                  <input className="form-control" value={form.item_description} onChange={e => f('item_description', e.target.value.replace(/[^a-zA-Z0-9 .,\-/]/g, '').toUpperCase())} placeholder="AS PER INVOICE" maxLength={30} />
                 </div>
               </div>
             </div>
