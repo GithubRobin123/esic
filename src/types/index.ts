@@ -51,6 +51,10 @@ export interface Profile {
   air_manifest_rate?: number;
   air_manifest_min_bill?: number;
   location_code?: string;
+  // Air invoice billing plan — exactly one of these three should be set
+  monthly_rate?: number;
+  per_mbl_rate?: number;
+  per_hbl_rate?: number;
   created_at: string;
 }
 
@@ -108,7 +112,7 @@ export interface MawbForm {
   igm_date: string;
 }
 
-// HAWB (simplified – removed consignee/shipper, date, shipment_type)
+// HAWB (simplified – removed consignee/shipper, shipment_type)
 export interface Hawb {
   id: string;
   mawb_id: string;
@@ -117,6 +121,7 @@ export interface Hawb {
   mawb_origin?: string;
   mawb_destination?: string;
   hawb_no: string;
+  hawb_date?: string;           // only required for Amend/Part/Delete-copy (child MAWBs)
   origin: string;
   destination: string;
   total_packages: number;
@@ -131,6 +136,7 @@ export interface Hawb {
 export interface HawbForm {
   mawb_id: string;
   hawb_no: string;
+  hawb_date?: string;
   origin: string;
   destination: string;
   total_packages: number | string;
@@ -356,4 +362,70 @@ export interface Invoice {
   status: string;
   created_by_name?: string;
   created_at: string;
+  // Auto-generated Air invoice fields (null/undefined for manually-entered invoices)
+  user_id?: string;
+  period_from?: string;
+  period_to?: string;
+  rate_type?: 'monthly' | 'mbl' | 'hbl';
+  quantity?: number;
+  rate?: number;
+  taxable_amount?: number;
+  gst_rate?: number;
+  gst_amount?: number;
+  round_off?: number;
+  total_amount?: number;
+}
+
+export interface AirInvoiceBuyer {
+  company_name?: string;
+  address1?: string;
+  address2?: string;
+  billing_state?: string;
+  gstin?: string;
+  email?: string;
+}
+
+export interface AirInvoiceSupplier {
+  name: string;
+  addressLines: string[];
+  mobile: string;
+  gstin: string;
+  email: string;
+}
+
+export interface AirInvoiceBank {
+  accountName: string;
+  accountNo: string;
+  ifsc: string;
+  branch: string;
+}
+
+export interface AirInvoiceCalc {
+  id?: string;
+  invoice_no?: string;
+  suggested_invoice_no?: string;
+  invoice_date: string;
+  period_from: string;
+  period_to: string;
+  profile_id?: string;
+  rateType?: 'monthly' | 'mbl' | 'hbl';
+  rate_type?: 'monthly' | 'mbl' | 'hbl';
+  quantity: number;
+  rate: number;
+  description: string;
+  taxableAmount?: number;
+  taxable_amount?: number;
+  gstRate?: number;
+  gst_rate?: number;
+  gstAmount?: number;
+  gst_amount?: number;
+  roundOff?: number;
+  round_off?: number;
+  total?: number;
+  total_amount?: number;
+  buyer: AirInvoiceBuyer;
+  supplier: AirInvoiceSupplier;
+  bank: AirInvoiceBank;
+  sac_code: string;
+  amount_in_words: string;
 }

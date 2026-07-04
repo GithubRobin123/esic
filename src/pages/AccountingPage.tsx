@@ -4,6 +4,8 @@ import api from '../utils/api';
 import { Invoice } from '../types';
 import toast from 'react-hot-toast';
 import { fmtDate } from '../utils/dateUtils';
+import { useAuth } from '../hooks/useAuth';
+import AirInvoicePage, { InvoiceDocument, printHtml } from './AirInvoicePage';
 
 const emptyForm = {
   invoice_no: '',
@@ -25,6 +27,7 @@ const InvoicePage: React.FC = () => {
   const [form, setForm] = useState({ ...emptyForm });
   const [saving, setSaving] = useState(false);
   const [statusFilter, setStatusFilter] = useState('');
+  const [reprint, setReprint] = useState<any>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -68,6 +71,19 @@ const InvoicePage: React.FC = () => {
       toast.success('Invoice deleted');
       load();
     } catch { toast.error('Failed to delete'); }
+  };
+
+  const handleReprint = async (id: string) => {
+    try {
+      const res = await api.get(`/reports/air-invoice/${id}`);
+      setReprint(res.data);
+    } catch { toast.error('Failed to load invoice'); }
+  };
+
+  const handlePrintReprint = () => {
+    const area = document.getElementById('reprint-print-area');
+    if (!area) return;
+    printHtml(`Invoice ${reprint?.invoice_no}`, area.innerHTML);
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -163,6 +179,9 @@ const InvoicePage: React.FC = () => {
                   <td className="text-muted text-sm">{r.created_by_name || '—'}</td>
                   <td>
                     <div style={{ display: 'flex', gap: 6 }}>
+                      {r.rate_type && (
+                        <button className="btn btn-secondary" style={{ padding: '3px 10px', fontSize: 12 }} onClick={() => handleReprint(r.id)}>Print</button>
+                      )}
                       <button className="btn btn-secondary" style={{ padding: '3px 10px', fontSize: 12 }} onClick={() => openEdit(r)}>Edit</button>
                       <button className="btn btn-danger" style={{ padding: '3px 10px', fontSize: 12 }} onClick={() => handleDelete(r.id)}>Del</button>
                     </div>
@@ -245,6 +264,26 @@ const InvoicePage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {reprint && (
+        <div className="modal-overlay" onClick={() => setReprint(null)}>
+          <div className="modal" style={{ maxWidth: 800, maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <span className="modal-title">Invoice {reprint.invoice_no}</span>
+              <button className="modal-close" onClick={() => setReprint(null)}>✕</button>
+            </div>
+            <div className="modal-body" style={{ overflowX: 'auto' }}>
+              <div id="reprint-print-area">
+                <InvoiceDocument inv={reprint} invoiceNo={reprint.invoice_no} />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setReprint(null)}>Close</button>
+              <button className="btn btn-primary" onClick={handlePrintReprint}>Print / Save as PDF</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -253,11 +292,14 @@ const InvoicePage: React.FC = () => {
 const AccountingPage: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { hasRole } = useAuth();
+  const isAdmin = hasRole(['master_admin', 'admin']);
 
   const subPath = location.pathname.replace('/accounting', '').replace(/^\//, '') || 'invoice';
 
   const tabs = [
     { key: 'invoice', label: 'View Invoice', path: '/accounting/invoice' },
+    ...(isAdmin ? [{ key: 'generate', label: 'Generate Invoice', path: '/accounting/generate' }] : []),
   ];
 
   return (
@@ -285,12 +327,14 @@ const AccountingPage: React.FC = () => {
         ))}
       </div>
 
-      {(subPath === 'invoice' || subPath === '') ? <InvoicePage /> : (
-        <div className="empty-state" style={{ padding: 60 }}>
-          <div className="empty-state-title">Coming Soon</div>
-          <p className="text-muted">This accounting sub-module will be available in a future update.</p>
-        </div>
-      )}
+      {(subPath === 'invoice' || subPath === '') ? <InvoicePage />
+        : subPath === 'generate' && isAdmin ? <AirInvoicePage />
+        : (
+          <div className="empty-state" style={{ padding: 60 }}>
+            <div className="empty-state-title">Coming Soon</div>
+            <p className="text-muted">This accounting sub-module will be available in a future update.</p>
+          </div>
+        )}
     </div>
   );
 };

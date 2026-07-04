@@ -15,7 +15,7 @@ interface HawbPageProps {
 type HawbModalMode = 'add' | 'edit' | 'amend' | null;
 
 const emptyForm: HawbForm = {
-  mawb_id: '', hawb_no: '', origin: '', destination: '',
+  mawb_id: '', hawb_no: '', hawb_date: '', origin: '', destination: '',
   total_packages: '', gross_weight: '', item_description: '',
 };
 
@@ -147,6 +147,7 @@ const HawbPage: React.FC<HawbPageProps> = ({ initialMode }) => {
     setForm({
       mawb_id: firstAmended?.id || h.mawb_id,
       hawb_no: h.hawb_no,
+      hawb_date: h.hawb_date ? h.hawb_date.slice(0, 10) : '',
       origin: h.origin,
       destination: h.destination,
       total_packages: h.total_packages,
@@ -394,6 +395,13 @@ const HawbPage: React.FC<HawbPageProps> = ({ initialMode }) => {
                   />
                 </div>
               </div>
+              {modalMode === 'amend' && (
+                <div className="form-group">
+                  <label className="form-label">House AWB Date:</label>
+                  <input className="form-control" type="date" value={form.hawb_date || ''} onChange={e => f('hawb_date', e.target.value)} />
+                  <p className="text-muted text-sm" style={{ marginTop: 4 }}>Leave blank to use today's date in the transmission file.</p>
+                </div>
+              )}
               <div className="form-row form-row-2">
                 <div className="form-group">
                   <label className="form-label">Port Of Origin: <span className="required">*</span></label>

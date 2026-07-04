@@ -6,6 +6,7 @@ interface DropdownItem { label: string; path: string; }
 interface NavItem { label: string; path?: string; items?: DropdownItem[]; adminOnly?: boolean; noUser?: boolean; }
 
 const NAV_ITEMS: NavItem[] = [
+  { label: 'Error Codes', path: '/error-codes' },
   { label: 'MAWB', path: '/mawb' },
   {
     label: 'HAWB',

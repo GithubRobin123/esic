@@ -22,6 +22,7 @@ import {
   StatementConsolPage, StatementHawbPage, DownloadFilePage, ChangeInvoicePage,
 } from './pages/AdminPages';
 import { NotFoundPage } from './pages/Placeholders';
+import { ErrorcodePage } from './pages/ErrorcodePage';
 
 const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <>
@@ -61,6 +62,7 @@ const AppRoutes: React.FC = () => {
     <AppLayout>
       <Routes>
         <Route path="/" element={<Navigate to="/mawb" replace />} />
+        <Route path="/error-codes" element={<ProtectedRoute><ErrorcodePage /></ProtectedRoute>} />
         <Route path="/login" element={<Navigate to="/mawb" replace />} />
 
         {/* MAWB */}

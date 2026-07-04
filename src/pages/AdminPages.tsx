@@ -321,6 +321,9 @@ const EMPTY_PROFILE_FORM = {
   sea_consol_fcl_rate: '',
   air_manifest_rate: '',
   air_manifest_min_bill: '',
+  monthly_rate: '',
+  per_mbl_rate: '',
+  per_hbl_rate: '',
   profile_code: '',
   company_name: '',
   carn_number: '',
@@ -438,6 +441,11 @@ export const RegisterProfilePage: React.FC = () => {
     e.preventDefault();
     if (!form.company_name) { toast.error('Agent Name is required'); return; }
     if (!editingId && selectedLocationCodes.length === 0) { toast.error('Select at least one location'); return; }
+    const billingPlanCount = [form.monthly_rate, form.per_mbl_rate, form.per_hbl_rate].filter(v => v.trim() !== '').length;
+    if (billingPlanCount > 1) {
+      toast.error('Only one billing plan (Monthly / Per MBL / Per HBL) can be filled at a time');
+      return;
+    }
     setSaving(true);
     try {
       if (editingId) {
@@ -484,6 +492,9 @@ export const RegisterProfilePage: React.FC = () => {
       sea_consol_fcl_rate: String(p.sea_consol_fcl_rate || ''),
       air_manifest_rate: String(p.air_manifest_rate || ''),
       air_manifest_min_bill: String(p.air_manifest_min_bill || ''),
+      monthly_rate: String(p.monthly_rate || ''),
+      per_mbl_rate: String(p.per_mbl_rate || ''),
+      per_hbl_rate: String(p.per_hbl_rate || ''),
       profile_code: p.profile_code || '',
       company_name: p.company_name || '',
       carn_number: p.carn_number || '',
@@ -687,6 +698,34 @@ export const RegisterProfilePage: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Air Invoice Billing Plan — exactly one of these three */}
+                <div style={{ borderTop: '1px solid var(--border)', marginBottom: 12, paddingTop: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Air Invoice Billing Plan</div>
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+                    Fill only ONE of the three below — it determines how this customer's Air invoices are calculated.
+                  </p>
+                  <div className="form-row form-row-3">
+                    <div className="form-group">
+                      <label className="form-label">Monthly Rate</label>
+                      <input className="form-control" type="number" step="0.01" value={form.monthly_rate}
+                        onChange={e => f('monthly_rate', e.target.value)} placeholder="0.00"
+                        disabled={!!form.per_mbl_rate.trim() || !!form.per_hbl_rate.trim()} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Per MBL Rate</label>
+                      <input className="form-control" type="number" step="0.01" value={form.per_mbl_rate}
+                        onChange={e => f('per_mbl_rate', e.target.value)} placeholder="0.00"
+                        disabled={!!form.monthly_rate.trim() || !!form.per_hbl_rate.trim()} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Per HBL Rate</label>
+                      <input className="form-control" type="number" step="0.01" value={form.per_hbl_rate}
+                        onChange={e => f('per_hbl_rate', e.target.value)} placeholder="0.00"
+                        disabled={!!form.monthly_rate.trim() || !!form.per_mbl_rate.trim()} />
+                    </div>
+                  </div>
+                </div>
+
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={saving}>
                     {saving ? 'Saving...' : editingId ? 'Update Profile' : `Save${selectedLocationCodes.length > 1 ? ` (${selectedLocationCodes.length} locations)` : ''}`}
@@ -770,12 +809,13 @@ export const RegisterProfilePage: React.FC = () => {
                   <th>Receiver ID</th>
                   <th>Control No</th>
                   <th>Pan No.</th>
+                  <th>Billing Plan</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
                 {profiles.length === 0 && (
-                  <tr><td colSpan={8} className="text-center text-muted" style={{ padding: '32px 0' }}>No profiles yet</td></tr>
+                  <tr><td colSpan={9} className="text-center text-muted" style={{ padding: '32px 0' }}>No profiles yet</td></tr>
                 )}
                 {profiles.map(p => (
                   <tr key={p.id}>
@@ -792,6 +832,12 @@ export const RegisterProfilePage: React.FC = () => {
                       })()
                     }</td>
                     <td className="font-mono text-sm">{p.pan_number || '—'}</td>
+                    <td className="text-sm">
+                      {p.monthly_rate ? `Monthly ₹${p.monthly_rate}`
+                        : p.per_mbl_rate ? `Per MBL ₹${p.per_mbl_rate}`
+                        : p.per_hbl_rate ? `Per HBL ₹${p.per_hbl_rate}`
+                        : <span className="text-muted">—</span>}
+                    </td>
                     <td style={{ whiteSpace: 'nowrap' }}>
                       <button className="btn-link" onClick={() => handleEdit(p)}>EDIT</button>
                       <span style={{ color: 'var(--border)', margin: '0 4px' }}>|</span>

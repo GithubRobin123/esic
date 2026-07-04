@@ -10,6 +10,7 @@ type FormMode = 'add' | 'edit' | 'part' | 'amend';
 
 interface InlineHawbRow {
   hawb_no: string;
+  hawb_date: string;
   total_packages: string;
   gross_weight: string;
   item_description: string;
@@ -18,6 +19,7 @@ interface InlineHawbRow {
 interface ExistingHawbRow {
   id: string;
   hawb_no: string;
+  hawb_date: string;
   origin: string;
   destination: string;
   total_packages: string;
@@ -27,6 +29,7 @@ interface ExistingHawbRow {
 
 const emptyHawbRow = (): InlineHawbRow => ({
   hawb_no: '',
+  hawb_date: '',
   total_packages: '',
   gross_weight: '',
   item_description: '',
@@ -95,6 +98,7 @@ const MawbFormPage: React.FC = () => {
         const rows: ExistingHawbRow[] = (hres.data.data || []).map((h: any) => ({
           id: h.id,
           hawb_no: h.hawb_no,
+          hawb_date: h.hawb_date ? h.hawb_date.slice(0, 10) : '',
           origin: h.origin,
           destination: h.destination,
           total_packages: String(h.total_packages),
@@ -186,6 +190,7 @@ const MawbFormPage: React.FC = () => {
   const preparedHawbs = inlineHawbs
     .map(row => ({
       hawb_no: row.hawb_no.trim(),
+      hawb_date: row.hawb_date.trim(),
       origin: form.origin.trim().toUpperCase(),
       destination: form.destination.trim().toUpperCase(),
       total_packages: row.total_packages.trim(),
@@ -270,6 +275,7 @@ const MawbFormPage: React.FC = () => {
         for (const h of existingHawbs) {
           await api.post(`/hawbs/amend/${h.id}`, {
             mawb_id: newMawbId,
+            hawb_date: h.hawb_date,
             origin: h.origin,
             destination: h.destination,
             total_packages: h.total_packages,
@@ -574,6 +580,7 @@ const MawbFormPage: React.FC = () => {
                     <tr>
                       <th style={{ width: 40 }}>#</th>
                       <th>HAWB NO</th>
+                      <th style={{ width: 150 }}>HAWB DATE</th>
                       <th style={{ width: 100 }}>ORIGIN</th>
                       <th style={{ width: 100 }}>DEST</th>
                       <th style={{ width: 140 }}>PACKAGES</th>
@@ -591,6 +598,15 @@ const MawbFormPage: React.FC = () => {
                             value={row.hawb_no}
                             disabled
                             style={{ background: '#f1f5f9' }}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            className="form-control"
+                            type="date"
+                            value={row.hawb_date}
+                            onChange={e => updateExistingHawbRow(index, 'hawb_date', e.target.value)}
+                            title="Leave blank to use today's date in the transmission file"
                           />
                         </td>
                         <td>
