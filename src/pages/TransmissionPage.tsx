@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { fmtDateTime } from '../utils/dateUtils';
 import Pagination from '../components/Pagination';
 import { isSignerRunning, signCgmContent, downloadSignedCgm, SIGNER_SETUP_MSG } from '../utils/localSigner';
+import { deliverFile } from '../utils/fileDownload';
 
 const TransmissionPage: React.FC = () => {
   const [params] = useSearchParams();
@@ -96,15 +97,9 @@ const TransmissionPage: React.FC = () => {
     try {
       const res = await api.post(`/transmissions/generate-cgm/${selectedMawbId}`, {});
       const { fileName, fileContent } = res.data;
-      // Custom non-sniffable MIME type (see localSigner.ts) — avoids Chrome sniffing
-      // the plain-ASCII CGM content back to text/plain and Android renaming to .txt
-      const url = window.URL.createObjectURL(new Blob([fileContent], { type: 'application/x-ices-manifest' }));
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = fileName;
-      link.click();
-      window.URL.revokeObjectURL(url);
-      toast.success(`Downloaded: ${fileName}`);
+      const result = await deliverFile(fileName, fileContent);
+      if (result === 'downloaded') toast.success(`Downloaded: ${fileName}`);
+      else if (result === 'shared') toast.success(`Ready to share: ${fileName}`);
       setHistPage(1); // triggers fetchHistory via useEffect
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Download failed');
@@ -148,8 +143,10 @@ const TransmissionPage: React.FC = () => {
       toast.loading('Waiting for USB token PIN...', { id: 'sign-toast' });
       const { signature, cert } = await signCgmContent(fileContent);
       toast.dismiss('sign-toast');
-      downloadSignedCgm(fileContent, signature, cert, fileName);
-      toast.success(`Signed file downloaded: ${fileName.replace(/\.cgm$/i, 'Signed.cgm')}`);
+      const signedName = fileName.replace(/\.cgm$/i, 'Signed.cgm');
+      const result = await downloadSignedCgm(fileContent, signature, cert, fileName);
+      if (result === 'downloaded') toast.success(`Signed file downloaded: ${signedName}`);
+      else if (result === 'shared') toast.success(`Signed file ready to share: ${signedName}`);
       setHistPage(1);
     } catch (err: any) {
       toast.dismiss('sign-toast');
@@ -319,12 +316,7 @@ const TransmissionPage: React.FC = () => {
                           onClick={async () => {
                             try {
                               const res = await api.get(`/transmissions/download/${t.id}`, { responseType: 'blob' });
-                              const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/x-ices-manifest' }));
-                              const link = document.createElement('a');
-                              link.href = url;
-                              link.download = t.file_name;
-                              link.click();
-                              window.URL.revokeObjectURL(url);
+                              await deliverFile(t.file_name, res.data);
                             } catch { toast.error('Download failed'); }
                           }}
                         >

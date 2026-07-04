@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import api from '../utils/api';
 import { IgmFlight, IgmFlightForm, IgmMawb, IgmMawbForm, EgmFlight, EgmFlightForm, EgmMawb, EgmMawbForm, EgmHawb, Location } from '../types';
 import toast from 'react-hot-toast';
+import { deliverFile } from '../utils/fileDownload';
 
 type Tab = 'igm-flights' | 'igm-mawbs' | 'egm-flights' | 'egm-mawbs' | 'egm-hawbs' | 'transmit';
 
@@ -282,10 +283,9 @@ const AirManifestPage: React.FC = () => {
       const cd = r.headers['content-disposition'] || '';
       const match = cd.match(/filename="?(.+)"?/);
       const fileName = match ? match[1] : `manifest.${transmitType.toLowerCase()}`;
-      const url2 = window.URL.createObjectURL(new Blob([r.data], { type: 'application/x-ices-manifest' }));
-      const a = document.createElement('a'); a.href = url2; a.download = fileName; a.click();
-      window.URL.revokeObjectURL(url2);
-      toast.success(`Downloaded: ${fileName}`);
+      const result = await deliverFile(fileName, r.data);
+      if (result === 'downloaded') toast.success(`Downloaded: ${fileName}`);
+      else if (result === 'shared') toast.success(`Ready to share: ${fileName}`);
       setPreview(null);
     } catch { toast.error('Transmit failed'); }
   };

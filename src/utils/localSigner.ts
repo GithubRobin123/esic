@@ -1,3 +1,5 @@
+import { deliverFile, DeliverResult } from './fileDownload';
+
 const SIGNER_BASE = window.location.hostname === 'localhost'
   ? 'http://localhost:7070'
   : 'https://localhost:7443';
@@ -97,30 +99,20 @@ export async function signCgmContent(fileContent: string, certSerialNo?: string)
 }
 
 // Appends the signature/certificate/version to the original CGM content and
-// downloads it as {originalName}Signed.cgm  (plain text, same format ICEGATE expects)
-export function downloadSignedCgm(
+// delivers it as {originalName}Signed.cgm (plain text, same format ICEGATE expects)
+export async function downloadSignedCgm(
   originalContent: string,
   signature: string,
   cert: string,
   cgmFileName: string
-): void {
+): Promise<DeliverResult> {
   const signedContent =
     `${originalContent}\n` +
     `<START-SIGNATURE>${signature}</START-SIGNATURE>\n` +
     `<START-CERTIFICATE>${cert}</START-CERTIFICATE>\n` +
     `<SIGNER-VERSION>V-NCODE_01.05.2013</SIGNER-VERSION>`;
 
-  // Custom non-sniffable MIME type. Both text/plain and application/octet-stream
-  // are in the browser's MIME-sniffing set — since CGM content is plain ASCII,
-  // Chrome sniffs it back to text/plain and Android renames the file to .txt.
-  // A made-up application/x-* type is never sniffed and keeps the filename as-is.
-  const blob = new Blob([signedContent], { type: 'application/x-ices-manifest' });
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = cgmFileName.replace(/\.cgm$/i, 'Signed.cgm');
-  link.click();
-  window.URL.revokeObjectURL(url);
+  return deliverFile(cgmFileName.replace(/\.cgm$/i, 'Signed.cgm'), signedContent);
 }
 
 export const SIGNER_SETUP_MSG =

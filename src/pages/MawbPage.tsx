@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { fmtDateTime } from '../utils/dateUtils';
 import Pagination from '../components/Pagination';
 import { isSignerRunning, signCgmContent, downloadSignedCgm, SIGNER_SETUP_MSG } from '../utils/localSigner';
+import { deliverFile } from '../utils/fileDownload';
 
 type ModalMode = 'delete-confirm' | null;
 
@@ -107,15 +108,9 @@ const MawbPage: React.FC = () => {
     try {
       const res = await api.post(`/transmissions/generate-cgm/${m.id}`, {});
       const { fileName, fileContent } = res.data;
-      // Custom non-sniffable MIME type (see localSigner.ts) — avoids Chrome sniffing
-      // the plain-ASCII CGM content back to text/plain and Android renaming to .txt
-      const url = window.URL.createObjectURL(new Blob([fileContent], { type: 'application/x-ices-manifest' }));
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = fileName;
-      link.click();
-      window.URL.revokeObjectURL(url);
-      toast.success(`Downloaded: ${fileName}`);
+      const result = await deliverFile(fileName, fileContent);
+      if (result === 'downloaded') toast.success(`Downloaded: ${fileName}`);
+      else if (result === 'shared') toast.success(`Ready to share: ${fileName}`);
       setShowTransmitted(true);
       fetchMawbs(page, pageSize, true);
     } catch (err: any) {
@@ -152,8 +147,10 @@ const MawbPage: React.FC = () => {
       toast.loading('Waiting for USB token PIN...', { id: 'sign-toast' });
       const { signature, cert } = await signCgmContent(fileContent);
       toast.dismiss('sign-toast');
-      downloadSignedCgm(fileContent, signature, cert, fileName);
-      toast.success(`Signed file downloaded: ${fileName.replace(/\.cgm$/i, 'Signed.cgm')}`);
+      const signedName = fileName.replace(/\.cgm$/i, 'Signed.cgm');
+      const result = await downloadSignedCgm(fileContent, signature, cert, fileName);
+      if (result === 'downloaded') toast.success(`Signed file downloaded: ${signedName}`);
+      else if (result === 'shared') toast.success(`Signed file ready to share: ${signedName}`);
       setShowTransmitted(true);
       fetchMawbs(page, pageSize, true);
     } catch (err: any) {

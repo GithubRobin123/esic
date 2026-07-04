@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import { Profile } from '../types';
 import toast from 'react-hot-toast';
 import { fmtDate, fmtDateTime } from '../utils/dateUtils';
+import { deliverFile } from '../utils/fileDownload';
 
 // ─── Register User ────────────────────────────────────────────────────────────
 export const RegisterUserPage: React.FC = () => {
@@ -1155,11 +1156,9 @@ export const DownloadFilePage: React.FC = () => {
     setDownloading(id);
     try {
       const r = await api.get(`/reports/download-files/${id}`, { responseType: 'blob' });
-      const url = window.URL.createObjectURL(new Blob([r.data], { type: 'application/x-ices-manifest' }));
-      const a = document.createElement('a');
-      a.href = url; a.download = fileName; a.click();
-      window.URL.revokeObjectURL(url);
-      toast.success(`Downloaded ${fileName}`);
+      const result = await deliverFile(fileName, r.data);
+      if (result === 'downloaded') toast.success(`Downloaded ${fileName}`);
+      else if (result === 'shared') toast.success(`Ready to share: ${fileName}`);
     } catch { toast.error('Download failed'); }
     finally { setDownloading(null); }
   };
