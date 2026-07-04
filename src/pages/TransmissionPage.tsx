@@ -96,8 +96,9 @@ const TransmissionPage: React.FC = () => {
     try {
       const res = await api.post(`/transmissions/generate-cgm/${selectedMawbId}`, {});
       const { fileName, fileContent } = res.data;
-      // application/octet-stream — text/plain gets renamed to .txt on mobile browsers
-      const url = window.URL.createObjectURL(new Blob([fileContent], { type: 'application/octet-stream' }));
+      // Custom non-sniffable MIME type (see localSigner.ts) — avoids Chrome sniffing
+      // the plain-ASCII CGM content back to text/plain and Android renaming to .txt
+      const url = window.URL.createObjectURL(new Blob([fileContent], { type: 'application/x-ices-manifest' }));
       const link = document.createElement('a');
       link.href = url;
       link.download = fileName;
@@ -318,7 +319,7 @@ const TransmissionPage: React.FC = () => {
                           onClick={async () => {
                             try {
                               const res = await api.get(`/transmissions/download/${t.id}`, { responseType: 'blob' });
-                              const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/octet-stream' }));
+                              const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/x-ices-manifest' }));
                               const link = document.createElement('a');
                               link.href = url;
                               link.download = t.file_name;

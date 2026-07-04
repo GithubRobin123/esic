@@ -110,9 +110,11 @@ export function downloadSignedCgm(
     `<START-CERTIFICATE>${cert}</START-CERTIFICATE>\n` +
     `<SIGNER-VERSION>V-NCODE_01.05.2013</SIGNER-VERSION>`;
 
-  // application/octet-stream — text/plain gets renamed to .txt on mobile browsers
-  // (Android maps that MIME type to .txt since .cgm isn't a registered extension)
-  const blob = new Blob([signedContent], { type: 'application/octet-stream' });
+  // Custom non-sniffable MIME type. Both text/plain and application/octet-stream
+  // are in the browser's MIME-sniffing set — since CGM content is plain ASCII,
+  // Chrome sniffs it back to text/plain and Android renames the file to .txt.
+  // A made-up application/x-* type is never sniffed and keeps the filename as-is.
+  const blob = new Blob([signedContent], { type: 'application/x-ices-manifest' });
   const url = window.URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

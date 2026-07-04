@@ -282,7 +282,7 @@ const AirManifestPage: React.FC = () => {
       const cd = r.headers['content-disposition'] || '';
       const match = cd.match(/filename="?(.+)"?/);
       const fileName = match ? match[1] : `manifest.${transmitType.toLowerCase()}`;
-      const url2 = window.URL.createObjectURL(new Blob([r.data], { type: 'application/octet-stream' }));
+      const url2 = window.URL.createObjectURL(new Blob([r.data], { type: 'application/x-ices-manifest' }));
       const a = document.createElement('a'); a.href = url2; a.download = fileName; a.click();
       window.URL.revokeObjectURL(url2);
       toast.success(`Downloaded: ${fileName}`);

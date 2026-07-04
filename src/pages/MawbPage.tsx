@@ -107,8 +107,9 @@ const MawbPage: React.FC = () => {
     try {
       const res = await api.post(`/transmissions/generate-cgm/${m.id}`, {});
       const { fileName, fileContent } = res.data;
-      // application/octet-stream — text/plain gets renamed to .txt on mobile browsers
-      const url = window.URL.createObjectURL(new Blob([fileContent], { type: 'application/octet-stream' }));
+      // Custom non-sniffable MIME type (see localSigner.ts) — avoids Chrome sniffing
+      // the plain-ASCII CGM content back to text/plain and Android renaming to .txt
+      const url = window.URL.createObjectURL(new Blob([fileContent], { type: 'application/x-ices-manifest' }));
       const link = document.createElement('a');
       link.href = url;
       link.download = fileName;
