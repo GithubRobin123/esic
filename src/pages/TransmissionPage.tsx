@@ -96,7 +96,8 @@ const TransmissionPage: React.FC = () => {
     try {
       const res = await api.post(`/transmissions/generate-cgm/${selectedMawbId}`, {});
       const { fileName, fileContent } = res.data;
-      const url = window.URL.createObjectURL(new Blob([fileContent], { type: 'text/plain' }));
+      // application/octet-stream — text/plain gets renamed to .txt on mobile browsers
+      const url = window.URL.createObjectURL(new Blob([fileContent], { type: 'application/octet-stream' }));
       const link = document.createElement('a');
       link.href = url;
       link.download = fileName;
@@ -317,7 +318,7 @@ const TransmissionPage: React.FC = () => {
                           onClick={async () => {
                             try {
                               const res = await api.get(`/transmissions/download/${t.id}`, { responseType: 'blob' });
-                              const url = window.URL.createObjectURL(new Blob([res.data]));
+                              const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/octet-stream' }));
                               const link = document.createElement('a');
                               link.href = url;
                               link.download = t.file_name;

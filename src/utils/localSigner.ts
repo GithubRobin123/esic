@@ -110,7 +110,9 @@ export function downloadSignedCgm(
     `<START-CERTIFICATE>${cert}</START-CERTIFICATE>\n` +
     `<SIGNER-VERSION>V-NCODE_01.05.2013</SIGNER-VERSION>`;
 
-  const blob = new Blob([signedContent], { type: 'text/plain' });
+  // application/octet-stream — text/plain gets renamed to .txt on mobile browsers
+  // (Android maps that MIME type to .txt since .cgm isn't a registered extension)
+  const blob = new Blob([signedContent], { type: 'application/octet-stream' });
   const url = window.URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

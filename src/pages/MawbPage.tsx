@@ -107,7 +107,8 @@ const MawbPage: React.FC = () => {
     try {
       const res = await api.post(`/transmissions/generate-cgm/${m.id}`, {});
       const { fileName, fileContent } = res.data;
-      const url = window.URL.createObjectURL(new Blob([fileContent], { type: 'text/plain' }));
+      // application/octet-stream — text/plain gets renamed to .txt on mobile browsers
+      const url = window.URL.createObjectURL(new Blob([fileContent], { type: 'application/octet-stream' }));
       const link = document.createElement('a');
       link.href = url;
       link.download = fileName;
