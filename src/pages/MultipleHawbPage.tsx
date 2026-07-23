@@ -291,7 +291,7 @@ const MultipleHawbPage: React.FC = () => {
                           className="form-control"
                           style={{ width: 80 }}
                           value={row.origin}
-                          onChange={e => updateRow(idx, 'origin', e.target.value.toUpperCase())}
+                          onChange={e => updateRow(idx, 'origin', e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase())}
                           maxLength={3}
                         />
                       </td>

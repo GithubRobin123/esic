@@ -180,7 +180,7 @@ const InvoicePage: React.FC = () => {
                   <td>
                     <div style={{ display: 'flex', gap: 6 }}>
                       {r.rate_type && (
-                        <button className="btn btn-secondary" style={{ padding: '3px 10px', fontSize: 12 }} onClick={() => handleReprint(r.id)}>Print</button>
+                        <button className="btn btn-secondary" style={{ padding: '3px 10px', fontSize: 12 }} onClick={() => handleReprint(r.id)}>⬇ Download</button>
                       )}
                       <button className="btn btn-secondary" style={{ padding: '3px 10px', fontSize: 12 }} onClick={() => openEdit(r)}>Edit</button>
                       <button className="btn btn-danger" style={{ padding: '3px 10px', fontSize: 12 }} onClick={() => handleDelete(r.id)}>Del</button>
@@ -279,7 +279,7 @@ const InvoicePage: React.FC = () => {
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setReprint(null)}>Close</button>
-              <button className="btn btn-primary" onClick={handlePrintReprint}>Print / Save as PDF</button>
+              <button className="btn btn-primary" onClick={handlePrintReprint}>⬇ Download PDF</button>
             </div>
           </div>
         </div>

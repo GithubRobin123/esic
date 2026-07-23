@@ -8,6 +8,7 @@ import { fmtDateTime } from '../utils/dateUtils';
 import Pagination from '../components/Pagination';
 import { isSignerRunning, signCgmContent, downloadSignedCgm, SIGNER_SETUP_MSG } from '../utils/localSigner';
 import { deliverFile } from '../utils/fileDownload';
+import { ChecklistModal } from './ReportPages';
 
 type ModalMode = 'delete-confirm' | null;
 
@@ -31,6 +32,7 @@ const MawbPage: React.FC = () => {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [showTransmitted, setShowTransmitted] = useState(false);
+  const [checklistTarget, setChecklistTarget] = useState<{ id: string; mawb_no: string } | null>(null);
   const navigate = useNavigate();
 
   const fetchMawbs = useCallback(async (p = page, ps = pageSize, transmitted = showTransmitted) => {
@@ -283,6 +285,15 @@ const MawbPage: React.FC = () => {
                               ? <><span className="spinner" style={{ width: 10, height: 10 }}></span> Signing...</>
                               : 'Sign'}
                           </button>
+                          <span style={{ color: 'var(--border)' }}>|</span>
+                          <button
+                            className="btn-link"
+                            onClick={() => setChecklistTarget({ id: m.id, mawb_no: m.mawb_no })}
+                            title="View checklist details"
+                            style={{ fontSize: 16 }}
+                          >
+                            👁
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -379,6 +390,15 @@ const MawbPage: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Checklist Modal */}
+      {checklistTarget && (
+        <ChecklistModal
+          mawbId={checklistTarget.id}
+          mawbNo={checklistTarget.mawb_no}
+          onClose={() => setChecklistTarget(null)}
+        />
       )}
     </div>
   );

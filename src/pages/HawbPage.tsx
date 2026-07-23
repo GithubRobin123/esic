@@ -120,6 +120,7 @@ const HawbPage: React.FC<HawbPageProps> = ({ initialMode }) => {
     setForm({
       mawb_id: h.mawb_id,
       hawb_no: h.hawb_no,
+      hawb_date: h.hawb_date ? h.hawb_date.slice(0, 10) : '',
       origin: h.origin,
       destination: h.destination,
       total_packages: h.total_packages,
@@ -395,7 +396,7 @@ const HawbPage: React.FC<HawbPageProps> = ({ initialMode }) => {
                   />
                 </div>
               </div>
-              {modalMode === 'amend' && (
+              {(modalMode === 'amend' || modalMode === 'edit') && (
                 <div className="form-group">
                   <label className="form-label">House AWB Date:</label>
                   <input className="form-control" type="date" value={form.hawb_date || ''} onChange={e => f('hawb_date', e.target.value)} />
@@ -405,7 +406,7 @@ const HawbPage: React.FC<HawbPageProps> = ({ initialMode }) => {
               <div className="form-row form-row-2">
                 <div className="form-group">
                   <label className="form-label">Port Of Origin: <span className="required">*</span></label>
-                  <input className="form-control" value={form.origin} onChange={e => f('origin', e.target.value.toUpperCase())} placeholder="e.g. PVG" maxLength={3} />
+                  <input className="form-control" value={form.origin} onChange={e => f('origin', e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase())} placeholder="e.g. PVG" maxLength={3} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Port Of DEST: <span className="required">*</span></label>

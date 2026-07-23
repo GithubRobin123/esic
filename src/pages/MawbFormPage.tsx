@@ -230,19 +230,12 @@ const MawbFormPage: React.FC = () => {
       return false;
     }
     if (showNewHawbSection && preparedHawbs.length > 0) {
-      const seen = new Set<string>();
       for (let i = 0; i < preparedHawbs.length; i++) {
         const row = preparedHawbs[i];
         if (!row.hawb_no) {
           toast.error(`HAWB row ${i + 1}: HAWB No is required`);
           return false;
         }
-        const key = row.hawb_no.toUpperCase();
-        if (seen.has(key)) {
-          toast.error(`Duplicate HAWB No: ${row.hawb_no}`);
-          return false;
-        }
-        seen.add(key);
       }
     }
 
@@ -381,7 +374,7 @@ const MawbFormPage: React.FC = () => {
               <input
                 className="form-control font-mono"
                 value={form.origin}
-                onChange={e => f('origin', e.target.value.toUpperCase())}
+                onChange={e => f('origin', e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase())}
                 placeholder="e.g. DXB"
                 maxLength={3}
               />
@@ -613,7 +606,7 @@ const MawbFormPage: React.FC = () => {
                           <input
                             className="form-control"
                             value={row.origin}
-                            onChange={e => updateExistingHawbRow(index, 'origin', e.target.value.toUpperCase())}
+                            onChange={e => updateExistingHawbRow(index, 'origin', e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase())}
                             maxLength={3}
                           />
                         </td>

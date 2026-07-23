@@ -7,9 +7,19 @@ import Pagination from '../components/Pagination';
 
 const thS: React.CSSProperties = { border: '1px solid #cbd5e1', padding: '5px 8px', background: '#e2e8f0', fontWeight: 700, fontSize: 11, whiteSpace: 'nowrap' };
 const tdS: React.CSSProperties = { border: '1px solid #cbd5e1', padding: '4px 8px', fontSize: 11 };
+// Same 7 columns (AWB / Origin / Dest / Packages / Weight / Item Desc / Msg Type) in both the
+// master and house tables below — fixed widths keep the two tables' columns lined up even when
+// Item Desc wraps to a longer line.
+const CL_COL_WIDTHS = ['16%', '10%', '10%', '12%', '12%', '30%', '10%'];
+const ClColgroup: React.FC = () => (
+  <colgroup>
+    {CL_COL_WIDTHS.map((w, i) => <col key={i} style={{ width: w }} />)}
+  </colgroup>
+);
+const tdWrapS: React.CSSProperties = { ...tdS, whiteSpace: 'normal', wordBreak: 'break-word' };
 
 // ─── Checklist modal (reusable) ───────────────────────────────────────────────
-const ChecklistModal: React.FC<{
+export const ChecklistModal: React.FC<{
   mawbId: string; mawbNo: string; onClose: () => void;
 }> = ({ mawbId, mawbNo, onClose }) => {
   const [data, setData] = useState<any[]>([]);
@@ -54,7 +64,8 @@ const ChecklistModal: React.FC<{
                 <div className="empty-state">No data found.</div>
               ) : data.map((mawb: any) => (
                 <div key={mawb.id} style={{ marginBottom: 20 }}>
-                  <table style={{ borderCollapse: 'collapse', width: '100%', marginBottom: 0 }}>
+                  <table style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed', marginBottom: 0 }}>
+                    <ClColgroup />
                     <thead>
                       <tr>
                         <th style={thS}>Master AWB</th>
@@ -64,7 +75,6 @@ const ChecklistModal: React.FC<{
                         <th style={thS}>Weight</th>
                         <th style={thS}>Item Desc</th>
                         <th style={thS}>Msg Type</th>
-                        <th style={thS}>Transmission Date</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -74,17 +84,16 @@ const ChecklistModal: React.FC<{
                         <td style={tdS}>{mawb.destination}</td>
                         <td style={tdS}>{mawb.total_packages}</td>
                         <td style={tdS}>{parseFloat(String(mawb.gross_weight)).toFixed(2)}</td>
-                        <td style={tdS}>CONSOL</td>
+                        <td style={tdWrapS}>CONSOL</td>
                         <td style={tdS}>{mawb.message_type || 'F'}</td>
-                        <td style={{ ...tdS, fontSize: 10 }}>{fmtDateTime(mawb.transmission_date)}</td>
                       </tr>
                     </tbody>
                   </table>
                   {mawb.hawbs?.length > 0 && (
-                    <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+                    <table style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed' }}>
+                      <ClColgroup />
                       <thead>
                         <tr>
-                          <th style={thS}>#</th>
                           <th style={thS}>House AWB</th>
                           <th style={thS}>Origin</th>
                           <th style={thS}>Dest</th>
@@ -95,20 +104,19 @@ const ChecklistModal: React.FC<{
                         </tr>
                       </thead>
                       <tbody>
-                        {mawb.hawbs.map((h: any, i: number) => (
+                        {mawb.hawbs.map((h: any) => (
                           <tr key={h.id}>
-                            <td style={{ ...tdS, color: 'var(--text-muted)' }}>{i + 1}</td>
                             <td style={tdS}>{h.hawb_no}</td>
                             <td style={tdS}>{h.origin}</td>
                             <td style={tdS}>{h.destination}</td>
                             <td style={tdS}>{h.total_packages}</td>
                             <td style={tdS}>{parseFloat(String(h.gross_weight)).toFixed(2)}</td>
-                            <td style={tdS}>{h.item_description || '—'}</td>
+                            <td style={tdWrapS}>{h.item_description || '—'}</td>
                             <td style={tdS}>{h.message_type || 'F'}</td>
                           </tr>
                         ))}
                         <tr style={{ fontWeight: 700, background: '#f1f5f9' }}>
-                          <td style={tdS} colSpan={2}>Count: {mawb.hawbs.length}</td>
+                          <td style={tdS}>Count: {mawb.hawbs.length}</td>
                           <td style={tdS} colSpan={2}>Total:</td>
                           <td style={tdS}>{mawb.hawbs.reduce((s: number, h: any) => s + Number(h.total_packages), 0)}</td>
                           <td style={tdS}>{mawb.hawbs.reduce((s: number, h: any) => s + parseFloat(h.gross_weight), 0).toFixed(2)}</td>

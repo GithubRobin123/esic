@@ -21,30 +21,37 @@ const InvoiceDocument: React.FC<{ inv: AirInvoiceCalc; invoiceNo: string }> = ({
   const roundOff = inv.roundOff ?? inv.round_off ?? 0;
   const total = inv.total ?? inv.total_amount ?? 0;
 
-  const cellB: React.CSSProperties = { border: '1px solid #333', padding: '6px 8px', fontSize: 12, verticalAlign: 'top' };
+  const cellB: React.CSSProperties = { border: '1px solid #333', padding: '10px 12px', fontSize: 13, lineHeight: 1.55, verticalAlign: 'top' };
   const cellR: React.CSSProperties = { ...cellB, textAlign: 'right' };
+  const th: React.CSSProperties = { ...cellB, background: '#f0f0f0', fontWeight: 700, textAlign: 'left' };
 
   return (
-    <div style={{ fontFamily: 'Arial, sans-serif', color: '#111', width: 720 }}>
-      <div style={{ textAlign: 'center', fontWeight: 700, fontSize: 18, marginBottom: 8, letterSpacing: 1 }}>INVOICE</div>
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 0 }}>
+    <div style={{ fontFamily: 'Arial, sans-serif', color: '#111', width: '100%', maxWidth: 794, margin: '0 auto', boxSizing: 'border-box' }}>
+      <div style={{ textAlign: 'center', fontWeight: 700, fontSize: 20, marginBottom: 14, letterSpacing: 2 }}>INVOICE</div>
+
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <tbody>
           <tr>
-            <td style={{ ...cellB, width: '55%' }}>
-              <div style={{ fontWeight: 700 }}>{inv.supplier.name}</div>
+            <td style={{ ...cellB, width: '58%' }}>
+              <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{inv.supplier.name}</div>
               {inv.supplier.addressLines.map((l, i) => <div key={i}>{l}</div>)}
-              <div>Mobile: {inv.supplier.mobile}</div>
+              <div style={{ marginTop: 4 }}>Mobile: {inv.supplier.mobile}</div>
               <div>GSTIN: {inv.supplier.gstin}</div>
               <div>Email: {inv.supplier.email}</div>
             </td>
             <td style={cellB}>
-              <div><strong>Invoice No.</strong> &nbsp; {invoiceNo}</div>
-              <div style={{ marginTop: 4 }}><strong>Dated</strong> &nbsp; {fmtDate(inv.invoice_date)}</div>
+              <div><strong>Invoice No.</strong><br />{invoiceNo}</div>
+              <div style={{ marginTop: 10 }}><strong>Dated</strong><br />{fmtDate(inv.invoice_date)}</div>
             </td>
           </tr>
+        </tbody>
+      </table>
+
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 10 }}>
+        <tbody>
           <tr>
-            <td style={cellB} colSpan={2}>
-              <div style={{ fontWeight: 700, marginBottom: 2 }}>Buyer</div>
+            <td style={cellB}>
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>Buyer</div>
               <div style={{ fontWeight: 600 }}>{inv.buyer.company_name}</div>
               {inv.buyer.address1 && <div>{inv.buyer.address1}</div>}
               {inv.buyer.address2 && <div>{inv.buyer.address2}</div>}
@@ -56,15 +63,15 @@ const InvoiceDocument: React.FC<{ inv: AirInvoiceCalc; invoiceNo: string }> = ({
         </tbody>
       </table>
 
-      <table style={{ width: '100%', borderCollapse: 'collapse', borderTop: 'none' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 10 }}>
         <thead>
           <tr>
-            <th style={{ ...cellB, width: 30 }}>Sl</th>
-            <th style={cellB}>Description of Goods</th>
-            <th style={{ ...cellB, width: 80 }}>Quantity</th>
-            <th style={{ ...cellB, width: 70 }}>Rate</th>
-            <th style={{ ...cellB, width: 40 }}>per</th>
-            <th style={{ ...cellR, width: 100 }}>Amount</th>
+            <th style={{ ...th, width: 34 }}>Sl</th>
+            <th style={th}>Description of Goods</th>
+            <th style={{ ...th, width: 90 }}>Quantity</th>
+            <th style={{ ...th, width: 80 }}>Rate</th>
+            <th style={{ ...th, width: 50 }}>per</th>
+            <th style={{ ...th, textAlign: 'right', width: 110 }}>Amount</th>
           </tr>
         </thead>
         <tbody>
@@ -72,8 +79,8 @@ const InvoiceDocument: React.FC<{ inv: AirInvoiceCalc; invoiceNo: string }> = ({
             <td style={cellB}>1</td>
             <td style={cellB}>
               <div style={{ fontWeight: 600 }}>{inv.description}</div>
-              <div>(SAC CODE: {inv.sac_code})</div>
-              <div>Period (From {fmtDate(inv.period_from)} to {fmtDate(inv.period_to)})</div>
+              <div style={{ color: '#444' }}>SAC CODE: {inv.sac_code}</div>
+              <div style={{ color: '#444' }}>Period: {fmtDate(inv.period_from)} to {fmtDate(inv.period_to)}</div>
             </td>
             <td style={cellB}>{inv.quantity} {rateType === 'monthly' ? 'Mo.' : 'Nos.'}</td>
             <td style={cellB}>{money(inv.rate)}</td>
@@ -83,7 +90,7 @@ const InvoiceDocument: React.FC<{ inv: AirInvoiceCalc; invoiceNo: string }> = ({
           <tr>
             <td style={cellB}></td>
             <td style={{ ...cellB, textAlign: 'right', fontStyle: 'italic' }}>OUTPUT IGST {gstRate}%</td>
-            <td style={cellB}></td><td style={cellB}></td><td style={cellB}>%</td>
+            <td style={cellB}></td><td style={cellB}></td><td style={cellB}></td>
             <td style={cellR}>{money(gstAmount)}</td>
           </tr>
           <tr>
@@ -93,15 +100,16 @@ const InvoiceDocument: React.FC<{ inv: AirInvoiceCalc; invoiceNo: string }> = ({
             <td style={cellR}>{money(roundOff)}</td>
           </tr>
           <tr>
-            <td style={cellB} colSpan={2}><strong>Total</strong></td>
-            <td style={{ ...cellB, fontWeight: 700 }}>{inv.quantity} {rateType === 'monthly' ? 'Mo.' : 'Nos.'}</td>
-            <td style={cellB}></td><td style={cellB}></td>
-            <td style={{ ...cellR, fontWeight: 700 }}>{money(total)}</td>
+            <td style={{ ...cellB, background: '#f7f7f7' }} colSpan={2}><strong>Total</strong></td>
+            <td style={{ ...cellB, background: '#f7f7f7', fontWeight: 700 }}>{inv.quantity} {rateType === 'monthly' ? 'Mo.' : 'Nos.'}</td>
+            <td style={{ ...cellB, background: '#f7f7f7' }}></td>
+            <td style={{ ...cellB, background: '#f7f7f7' }}></td>
+            <td style={{ ...cellR, background: '#f7f7f7', fontWeight: 700, fontSize: 14 }}>₹ {money(total)}</td>
           </tr>
         </tbody>
       </table>
 
-      <table style={{ width: '100%', borderCollapse: 'collapse', borderTop: 'none' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 10 }}>
         <tbody>
           <tr>
             <td style={cellB}>
@@ -109,21 +117,24 @@ const InvoiceDocument: React.FC<{ inv: AirInvoiceCalc; invoiceNo: string }> = ({
               <div>Rs. {inv.amount_in_words} ONLY</div>
             </td>
           </tr>
-          <tr>
-            <td style={cellB}>
-              <div><strong>Bank Details:</strong> {inv.bank.accountName}</div>
-              <div><strong>A/C:</strong> {inv.bank.accountNo}, <strong>IFSC:</strong> {inv.bank.ifsc}, <strong>Branch:</strong> {inv.bank.branch}</div>
-            </td>
-          </tr>
-          <tr>
-            <td style={cellB}>
-              <div><strong>Declaration</strong></div>
-              <div style={{ fontSize: 11 }}>We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.</div>
-            </td>
-          </tr>
         </tbody>
       </table>
-      <div style={{ textAlign: 'center', fontSize: 11, marginTop: 6, color: '#555' }}>This is a Computer Generated Invoice</div>
+
+      <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+        <div style={{ ...cellB, flex: 1 }}>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>Bank Details</div>
+          <div>{inv.bank.accountName}</div>
+          <div><strong>A/C:</strong> {inv.bank.accountNo}</div>
+          <div><strong>IFSC:</strong> {inv.bank.ifsc}</div>
+          <div><strong>Branch:</strong> {inv.bank.branch}</div>
+        </div>
+        <div style={{ ...cellB, flex: 1 }}>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>Declaration</div>
+          <div style={{ fontSize: 12, color: '#333' }}>We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.</div>
+        </div>
+      </div>
+
+      <div style={{ textAlign: 'center', fontSize: 12, marginTop: 14, color: '#666' }}>This is a Computer Generated Invoice</div>
     </div>
   );
 };
@@ -133,9 +144,11 @@ const printHtml = (title: string, innerHtml: string) => {
   if (!win) { toast.error('Popup blocked — allow popups to print'); return; }
   win.document.write(`<html><head><title>${title}</title>
     <style>
-      body{font-family:Arial,sans-serif;margin:20px}
+      @page{size:A4;margin:12mm}
+      *{box-sizing:border-box}
+      body{font-family:Arial,sans-serif;margin:0;padding:16px}
       table{border-collapse:collapse}
-      @media print{body{margin:0}}
+      @media print{body{padding:0}}
     </style></head>
     <body>${innerHtml}</body></html>`);
   win.document.close();
@@ -266,7 +279,7 @@ const AirInvoicePage: React.FC = () => {
                 {saving ? 'Generating...' : 'Generate & Save Invoice'}
               </button>
             ) : (
-              <button className="btn btn-primary" onClick={handlePrint}>Print / Save as PDF</button>
+              <button className="btn btn-primary" onClick={handlePrint}>⬇ Download PDF</button>
             )}
           </div>
         </div>
