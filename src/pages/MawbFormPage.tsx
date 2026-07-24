@@ -92,8 +92,9 @@ const MawbFormPage: React.FC = () => {
         igm_date: m.igm_date?.slice(0, 10) || '',
       });
 
+      // Edit: load this MAWB's existing HAWBs so they can be edited alongside it.
       // Amend: load the parent's existing HAWBs so they can be carried into the amendment (editable, but numbers fixed)
-      if (location.pathname.endsWith('/amend')) {
+      if (mode === 'edit' || location.pathname.endsWith('/amend')) {
         const hres = await api.get('/hawbs', { params: { mawb_id: id, pageSize: 1000 } });
         const rows: ExistingHawbRow[] = (hres.data.data || []).map((h: any) => ({
           id: h.id,
@@ -175,9 +176,24 @@ const MawbFormPage: React.FC = () => {
     setInlineHawbs(prev => prev.map((row, i) => i === index ? { ...row, [field]: value } : row));
   };
 
-  // Amend: existing HAWBs are editable (packages/weight/description/route), but HAWB numbers stay fixed
-  const updateExistingHawbRow = (index: number, field: keyof Omit<ExistingHawbRow, 'id' | 'hawb_no'>, value: string) => {
+  // Edit mode: every HAWB field is editable, including HAWB No.
+  // Amend mode: existing HAWBs are editable (packages/weight/description/route), but HAWB numbers stay fixed
+  const updateExistingHawbRow = (index: number, field: keyof Omit<ExistingHawbRow, 'id'>, value: string) => {
     setExistingHawbs(prev => prev.map((row, i) => i === index ? { ...row, [field]: value } : row));
+  };
+
+  // Edit mode only: append a brand-new (unsaved) HAWB row — id stays '' until it's created on save
+  const addExistingHawbRow = () => {
+    setExistingHawbs(prev => [...prev, {
+      id: '', hawb_no: '', hawb_date: '',
+      origin: form.origin.trim().toUpperCase(), destination: form.destination.trim().toUpperCase(),
+      total_packages: '', gross_weight: '', item_description: '',
+    }]);
+  };
+
+  // Only unsaved rows (no id yet) can be removed here; saved HAWBs are deleted from the HAWB list page
+  const removeExistingHawbRow = (index: number) => {
+    setExistingHawbs(prev => prev.filter((_, i) => i !== index));
   };
 
   const existingTotalPackages = existingHawbs.reduce((s, r) => s + (parseInt(r.total_packages, 10) || 0), 0);
@@ -238,6 +254,16 @@ const MawbFormPage: React.FC = () => {
         }
       }
     }
+    // Edit mode: newly added HAWB rows (no id yet) need a HAWB No before they can be created
+    const newHawbRows = existingHawbs.filter(h => !h.id && Boolean(h.hawb_no || h.total_packages || h.gross_weight));
+    if (mode === 'edit') {
+      for (let i = 0; i < newHawbRows.length; i++) {
+        if (!newHawbRows[i].hawb_no) {
+          toast.error(`New HAWB row: HAWB No is required`);
+          return false;
+        }
+      }
+    }
 
     setSaving(true);
     try {
@@ -252,7 +278,32 @@ const MawbFormPage: React.FC = () => {
         }
       } else if (mode === 'edit' && id) {
         await api.put(`/mawbs/${id}`, form);
-        toast.success('MAWB updated');
+        const existingRows = existingHawbs.filter(h => h.id);
+        for (const h of existingRows) {
+          await api.put(`/hawbs/${h.id}`, {
+            hawb_no: h.hawb_no,
+            hawb_date: h.hawb_date,
+            origin: h.origin,
+            destination: h.destination,
+            total_packages: h.total_packages,
+            gross_weight: h.gross_weight,
+            item_description: h.item_description,
+          });
+        }
+        for (const h of newHawbRows) {
+          await api.post('/hawbs', {
+            mawb_id: id,
+            hawb_no: h.hawb_no,
+            hawb_date: h.hawb_date,
+            origin: h.origin || form.origin,
+            destination: h.destination || form.destination,
+            total_packages: h.total_packages,
+            gross_weight: h.gross_weight,
+            item_description: h.item_description,
+          });
+        }
+        const totalCount = existingRows.length + newHawbRows.length;
+        toast.success(`MAWB updated${totalCount > 0 ? ` with ${totalCount} HAWB${totalCount === 1 ? '' : 's'}` : ''}`);
       } else if (mode === 'part' && id) {
         const res = await api.post(`/mawbs/part/${id}`, form);
         let hawbMsg = '';
@@ -551,14 +602,21 @@ const MawbFormPage: React.FC = () => {
         </div>
       )}
 
-      {/* HAWB List — amend mode: existing HAWBs carried over, editable (HAWB No fixed, no new rows) */}
-      {mode === 'amend' && (
+      {/* HAWB List — edit mode: full HAWB details editable (incl. HAWB No). Amend mode: existing HAWBs carried over, editable (HAWB No fixed, no new rows) */}
+      {(mode === 'edit' || mode === 'amend') && (
         <div className="card" style={{ maxWidth: 960, marginBottom: 24 }}>
-          <div style={{ padding: '14px 24px', borderBottom: '1px solid var(--border)' }}>
-            <h2 className="page-title" style={{ fontSize: 18, margin: 0 }}>HAWB List (Existing — editable)</h2>
-            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-              These HAWBs will be carried into the amendment. You can edit details, but HAWB numbers cannot be changed. New HAWBs cannot be added in Amend.
-            </p>
+          <div style={{ padding: '14px 24px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+            <div>
+              <h2 className="page-title" style={{ fontSize: 18, margin: 0 }}>HAWB List (Existing — editable)</h2>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                {mode === 'edit'
+                  ? 'Edit the HAWB details for this MAWB, or add new HAWBs below. Changes are saved together with the MAWB when you click Save.'
+                  : 'These HAWBs will be carried into the amendment. You can edit details, but HAWB numbers cannot be changed. New HAWBs cannot be added in Amend.'}
+              </p>
+            </div>
+            {mode === 'edit' && (
+              <button className="btn btn-primary btn-sm" style={{ whiteSpace: 'nowrap' }} onClick={addExistingHawbRow}>+ Add HAWB</button>
+            )}
           </div>
 
           <div className="table-wrapper" style={{ margin: 0 }}>
@@ -579,18 +637,20 @@ const MawbFormPage: React.FC = () => {
                       <th style={{ width: 140 }}>PACKAGES</th>
                       <th style={{ width: 140 }}>WEIGHT</th>
                       <th>DESCRIPTION</th>
+                      {mode === 'edit' && <th style={{ width: 80 }}>ACTION</th>}
                     </tr>
                   </thead>
                   <tbody>
                     {existingHawbs.map((row, index) => (
-                      <tr key={row.id}>
+                      <tr key={row.id || `new-${index}`}>
                         <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{index + 1}</td>
                         <td>
                           <input
                             className="form-control font-mono"
                             value={row.hawb_no}
-                            disabled
-                            style={{ background: '#f1f5f9' }}
+                            onChange={e => updateExistingHawbRow(index, 'hawb_no', e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase())}
+                            disabled={mode === 'amend'}
+                            style={mode === 'amend' ? { background: '#f1f5f9' } : {}}
                           />
                         </td>
                         <td>
@@ -645,6 +705,19 @@ const MawbFormPage: React.FC = () => {
                             maxLength={30}
                           />
                         </td>
+                        {mode === 'edit' && (
+                          <td>
+                            {!row.id && (
+                              <button
+                                className="btn btn-sm"
+                                style={{ background: '#ef4444', color: '#fff', border: 'none', padding: '4px 10px' }}
+                                onClick={() => removeExistingHawbRow(index)}
+                              >
+                                Remove
+                              </button>
+                            )}
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>

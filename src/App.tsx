@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import api from './utils/api';
+import { initAutoOpenDatePicker } from './utils/autoOpenDatePicker';
 import Navbar from './components/Navbar';
 import ProtectedRoute from './components/ProtectedRoute';
 
@@ -123,6 +124,7 @@ const useKeepAlive = () => {
 
 const App: React.FC = () => {
   useKeepAlive();
+  useEffect(() => initAutoOpenDatePicker(), []);
   return (
   <BrowserRouter>
     <AuthProvider>
