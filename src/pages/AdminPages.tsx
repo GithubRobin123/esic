@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { fmtDate, fmtDateTime } from '../utils/dateUtils';
 import { deliverFile } from '../utils/fileDownload';
 
+import DateInput from '../components/DateInput';
 // ─── Register User ────────────────────────────────────────────────────────────
 export const RegisterUserPage: React.FC = () => {
   const [form, setForm] = useState({ username: '', password: '', full_name: '', email: '', role: 'user', profile_id: '' });
@@ -1041,11 +1042,11 @@ export const StatementHawbPage: React.FC = () => {
           <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label className="form-label">From Date</label>
-              <input className="form-control" type="date" value={filters.from_date} onChange={e => f('from_date', e.target.value)} />
+              <DateInput className="form-control" value={filters.from_date} onChange={e => f('from_date', e.target.value)} />
             </div>
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label className="form-label">To Date</label>
-              <input className="form-control" type="date" value={filters.to_date} onChange={e => f('to_date', e.target.value)} />
+              <DateInput className="form-control" value={filters.to_date} onChange={e => f('to_date', e.target.value)} />
             </div>
             <button className="btn btn-primary" onClick={load} disabled={loading}>{loading ? 'Loading...' : 'Search'}</button>
             <button className="btn btn-secondary" onClick={() => setFilters({ from_date: '', to_date: '' })}>Clear</button>

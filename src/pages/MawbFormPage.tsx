@@ -6,6 +6,7 @@ import { useAuth } from '../hooks/useAuth';
 import { sanitizeDecimal } from '../utils/numberUtils';
 import toast from 'react-hot-toast';
 
+import DateInput from '../components/DateInput';
 type FormMode = 'add' | 'edit' | 'part' | 'amend';
 
 interface InlineHawbRow {
@@ -475,7 +476,7 @@ const MawbFormPage: React.FC = () => {
                 </div>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">IGM Date</label>
-                  <input className="form-control" type="date" value={form.igm_date} onChange={e => f('igm_date', e.target.value)} />
+                  <DateInput className="form-control" value={form.igm_date} onChange={e => f('igm_date', e.target.value)} />
                 </div>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">Flight No.</label>
@@ -483,7 +484,7 @@ const MawbFormPage: React.FC = () => {
                 </div>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">Flight Date</label>
-                  <input className="form-control" type="date" value={form.flight_origin_date} onChange={e => f('flight_origin_date', e.target.value)} />
+                  <DateInput className="form-control" value={form.flight_origin_date} onChange={e => f('flight_origin_date', e.target.value)} />
                 </div>
               </div>
             </>
@@ -654,9 +655,8 @@ const MawbFormPage: React.FC = () => {
                           />
                         </td>
                         <td>
-                          <input
+                          <DateInput
                             className="form-control"
-                            type="date"
                             value={row.hawb_date}
                             onChange={e => updateExistingHawbRow(index, 'hawb_date', e.target.value)}
                             title="Leave blank to use today's date in the transmission file"

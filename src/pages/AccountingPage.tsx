@@ -7,6 +7,7 @@ import { fmtDate } from '../utils/dateUtils';
 import { useAuth } from '../hooks/useAuth';
 import AirInvoicePage, { InvoiceDocument, printHtml } from './AirInvoicePage';
 
+import DateInput from '../components/DateInput';
 const emptyForm = {
   invoice_no: '',
   invoice_date: '',
@@ -209,7 +210,7 @@ const InvoicePage: React.FC = () => {
                   </div>
                   <div className="form-group">
                     <label className="form-label">Date <span className="required">*</span></label>
-                    <input className="form-control" type="date" value={form.invoice_date} onChange={e => f('invoice_date', e.target.value)} />
+                    <DateInput className="form-control" value={form.invoice_date} onChange={e => f('invoice_date', e.target.value)} />
                   </div>
                 </div>
                 <div className="form-row form-row-2">

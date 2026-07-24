@@ -5,6 +5,7 @@ import { fmtDate, fmtDateTime } from '../utils/dateUtils';
 import { useAuth } from '../hooks/useAuth';
 import Pagination from '../components/Pagination';
 
+import DateInput from '../components/DateInput';
 const thS: React.CSSProperties = { border: '1px solid #cbd5e1', padding: '5px 8px', background: '#e2e8f0', fontWeight: 700, fontSize: 11, whiteSpace: 'nowrap' };
 const tdS: React.CSSProperties = { border: '1px solid #cbd5e1', padding: '4px 8px', fontSize: 11 };
 // Same 7 columns (AWB / Origin / Dest / Packages / Weight / Item Desc / Msg Type) in both the
@@ -176,11 +177,11 @@ export const ChecklistPage: React.FC = () => {
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label className="form-label">From Date</label>
-              <input className="form-control" type="date" value={filters.from_date} onChange={e => f('from_date', e.target.value)} />
+              <DateInput className="form-control" value={filters.from_date} onChange={e => f('from_date', e.target.value)} />
             </div>
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label className="form-label">To Date</label>
-              <input className="form-control" type="date" value={filters.to_date} onChange={e => f('to_date', e.target.value)} />
+              <DateInput className="form-control" value={filters.to_date} onChange={e => f('to_date', e.target.value)} />
             </div>
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label className="form-label">Status</label>
@@ -402,11 +403,11 @@ export const ConsolStatementPage: React.FC = () => {
             )}
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label className="form-label">From Date</label>
-              <input className="form-control" type="date" value={filters.from_date} onChange={e => f('from_date', e.target.value)} />
+              <DateInput className="form-control" value={filters.from_date} onChange={e => f('from_date', e.target.value)} />
             </div>
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label className="form-label">To Date</label>
-              <input className="form-control" type="date" value={filters.to_date} onChange={e => f('to_date', e.target.value)} />
+              <DateInput className="form-control" value={filters.to_date} onChange={e => f('to_date', e.target.value)} />
             </div>
             <button className="btn btn-primary" onClick={() => setPage(1)} disabled={loading}>
               {loading ? 'Loading...' : 'Search'}

@@ -4,6 +4,7 @@ import { IgmFlight, IgmFlightForm, IgmMawb, IgmMawbForm, EgmFlight, EgmFlightFor
 import toast from 'react-hot-toast';
 import { deliverFile } from '../utils/fileDownload';
 
+import DateInput from '../components/DateInput';
 type Tab = 'igm-flights' | 'igm-mawbs' | 'egm-flights' | 'egm-mawbs' | 'egm-hawbs' | 'transmit';
 
 const SHIP = [{ v: 'T', l: 'T - Total' }, { v: 'P', l: 'P - Part' }, { v: 'S', l: 'S - Split' }];
@@ -603,7 +604,7 @@ const AirManifestPage: React.FC = () => {
             <div className="modal-body">
               <div className="form-row form-row-3">
                 <div className="form-group"><label className="form-label">Flight No. <span className="required">*</span></label><input className="form-control font-mono" value={igmFlightForm.flight_no} onChange={e => fif('flight_no', e.target.value.toUpperCase())} placeholder="e.g. AI123" /></div>
-                <div className="form-group"><label className="form-label">Origin Date <span className="required">*</span></label><input className="form-control" type="date" value={igmFlightForm.flight_origin_date} onChange={e => fif('flight_origin_date', e.target.value)} /></div>
+                <div className="form-group"><label className="form-label">Origin Date <span className="required">*</span></label><DateInput className="form-control" value={igmFlightForm.flight_origin_date} onChange={e => fif('flight_origin_date', e.target.value)} /></div>
                 <div className="form-group"><label className="form-label">Expected Arrival</label><input className="form-control" type="datetime-local" value={igmFlightForm.expected_arrival} onChange={e => fif('expected_arrival', e.target.value)} /></div>
               </div>
               <div className="form-row form-row-3">
@@ -615,7 +616,7 @@ const AirManifestPage: React.FC = () => {
                 <div className="form-group"><label className="form-label">Customs House Code</label><input className="form-control font-mono" value={igmFlightForm.customs_house_code} onChange={e => fif('customs_house_code', e.target.value)} placeholder="INDEL4" maxLength={6} /></div>
                 <div className="form-group"><label className="form-label">Registration No.</label><input className="form-control" value={igmFlightForm.registration_no} onChange={e => fif('registration_no', e.target.value)} maxLength={10} /></div>
                 <div className="form-group"><label className="form-label">IGM No.</label><input className="form-control font-mono" value={igmFlightForm.igm_no} onChange={e => fif('igm_no', e.target.value.toUpperCase())} maxLength={7} /></div>
-                <div className="form-group"><label className="form-label">IGM Date</label><input className="form-control" type="date" value={igmFlightForm.igm_date} onChange={e => fif('igm_date', e.target.value)} /></div>
+                <div className="form-group"><label className="form-label">IGM Date</label><DateInput className="form-control" value={igmFlightForm.igm_date} onChange={e => fif('igm_date', e.target.value)} /></div>
               </div>
             </div>
             <div className="modal-footer">
@@ -640,7 +641,7 @@ const AirManifestPage: React.FC = () => {
                 <div className="form-group"><label className="form-label">MAWB No. <span className="required">*</span></label><input className="form-control font-mono" value={igmMawbForm.mawb_no} onChange={e => fim('mawb_no', e.target.value)} placeholder="e.g. 05766499823" /></div>
               </div>
               <div className="form-row form-row-3">
-                <div className="form-group"><label className="form-label">MAWB Date</label><input className="form-control" type="date" value={igmMawbForm.mawb_date} onChange={e => fim('mawb_date', e.target.value)} /></div>
+                <div className="form-group"><label className="form-label">MAWB Date</label><DateInput className="form-control" value={igmMawbForm.mawb_date} onChange={e => fim('mawb_date', e.target.value)} /></div>
                 <div className="form-group"><label className="form-label">Port of Origin <span className="required">*</span></label><select className="form-control" value={igmMawbForm.port_of_origin} onChange={e => fim('port_of_origin', e.target.value)}><option value="">Select...</option>{locOpts}</select></div>
                 <div className="form-group"><label className="form-label">Port of Destination <span className="required">*</span></label><select className="form-control" value={igmMawbForm.port_of_destination} onChange={e => fim('port_of_destination', e.target.value)}><option value="">Select...</option>{locOpts}</select></div>
               </div>
@@ -674,7 +675,7 @@ const AirManifestPage: React.FC = () => {
             <div className="modal-body">
               <div className="form-row form-row-3">
                 <div className="form-group"><label className="form-label">Flight No. <span className="required">*</span></label><input className="form-control font-mono" value={egmFlightForm.flight_no} onChange={e => fef('flight_no', e.target.value.toUpperCase())} placeholder="e.g. AI456" /></div>
-                <div className="form-group"><label className="form-label">Departure Date <span className="required">*</span></label><input className="form-control" type="date" value={egmFlightForm.flight_departure_date} onChange={e => fef('flight_departure_date', e.target.value)} /></div>
+                <div className="form-group"><label className="form-label">Departure Date <span className="required">*</span></label><DateInput className="form-control" value={egmFlightForm.flight_departure_date} onChange={e => fef('flight_departure_date', e.target.value)} /></div>
                 <div className="form-group"><label className="form-label">Nil Cargo</label><select className="form-control" value={egmFlightForm.nil_cargo} onChange={e => fef('nil_cargo', e.target.value)}><option value="N">N – Has Cargo</option><option value="Y">Y – Nil Cargo</option></select></div>
               </div>
               <div className="form-row form-row-3">
@@ -684,7 +685,7 @@ const AirManifestPage: React.FC = () => {
               </div>
               <div className="form-row form-row-3">
                 <div className="form-group"><label className="form-label">EGM No.</label><input className="form-control font-mono" value={egmFlightForm.egm_no} onChange={e => fef('egm_no', e.target.value)} maxLength={7} /></div>
-                <div className="form-group"><label className="form-label">EGM Date</label><input className="form-control" type="date" value={egmFlightForm.egm_date} onChange={e => fef('egm_date', e.target.value)} /></div>
+                <div className="form-group"><label className="form-label">EGM Date</label><DateInput className="form-control" value={egmFlightForm.egm_date} onChange={e => fef('egm_date', e.target.value)} /></div>
                 <div className="form-group"><label className="form-label">Registration No.</label><input className="form-control" value={egmFlightForm.registration_no} onChange={e => fef('registration_no', e.target.value)} maxLength={10} /></div>
               </div>
             </div>
@@ -710,7 +711,7 @@ const AirManifestPage: React.FC = () => {
                 <div className="form-group"><label className="form-label">MAWB No. <span className="required">*</span></label><input className="form-control font-mono" value={egmMawbForm.mawb_no} onChange={e => fem('mawb_no', e.target.value)} /></div>
               </div>
               <div className="form-row form-row-3">
-                <div className="form-group"><label className="form-label">MAWB Date</label><input className="form-control" type="date" value={egmMawbForm.mawb_date} onChange={e => fem('mawb_date', e.target.value)} /></div>
+                <div className="form-group"><label className="form-label">MAWB Date</label><DateInput className="form-control" value={egmMawbForm.mawb_date} onChange={e => fem('mawb_date', e.target.value)} /></div>
                 <div className="form-group"><label className="form-label">Port of Loading</label><select className="form-control" value={egmMawbForm.port_of_loading} onChange={e => fem('port_of_loading', e.target.value)}><option value="">Select...</option>{locOpts}</select></div>
                 <div className="form-group"><label className="form-label">Port of Destination</label><select className="form-control" value={egmMawbForm.port_of_destination} onChange={e => fem('port_of_destination', e.target.value)}><option value="">Select...</option>{locOpts}</select></div>
               </div>
@@ -743,7 +744,7 @@ const AirManifestPage: React.FC = () => {
                 <div className="form-group"><label className="form-label">HAWB No. <span className="required">*</span></label><input className="form-control font-mono" value={egmHawbForm.hawb_no} onChange={e => feh('hawb_no', e.target.value)} /></div>
               </div>
               <div className="form-row form-row-3">
-                <div className="form-group"><label className="form-label">HAWB Date</label><input className="form-control" type="date" value={egmHawbForm.hawb_date} onChange={e => feh('hawb_date', e.target.value)} /></div>
+                <div className="form-group"><label className="form-label">HAWB Date</label><DateInput className="form-control" value={egmHawbForm.hawb_date} onChange={e => feh('hawb_date', e.target.value)} /></div>
                 <div className="form-group"><label className="form-label">Port of Origin</label><select className="form-control" value={egmHawbForm.port_of_origin} onChange={e => feh('port_of_origin', e.target.value)}><option value="">Select...</option>{locOpts}</select></div>
                 <div className="form-group"><label className="form-label">Port of Destination</label><select className="form-control" value={egmHawbForm.port_of_destination} onChange={e => feh('port_of_destination', e.target.value)}><option value="">Select...</option>{locOpts}</select></div>
               </div>

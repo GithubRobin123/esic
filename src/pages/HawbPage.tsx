@@ -8,6 +8,7 @@ import { sanitizeDecimal } from '../utils/numberUtils';
 import Pagination from '../components/Pagination';
 import { useAuth } from '../hooks/useAuth';
 
+import DateInput from '../components/DateInput';
 interface HawbPageProps {
   initialMode?: string;
 }
@@ -399,7 +400,7 @@ const HawbPage: React.FC<HawbPageProps> = ({ initialMode }) => {
               {(modalMode === 'amend' || modalMode === 'edit') && (
                 <div className="form-group">
                   <label className="form-label">House AWB Date:</label>
-                  <input className="form-control" type="date" value={form.hawb_date || ''} onChange={e => f('hawb_date', e.target.value)} />
+                  <DateInput className="form-control" value={form.hawb_date || ''} onChange={e => f('hawb_date', e.target.value)} />
                   <p className="text-muted text-sm" style={{ marginTop: 4 }}>Leave blank to use today's date in the transmission file.</p>
                 </div>
               )}

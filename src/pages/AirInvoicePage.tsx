@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { AirInvoiceCalc } from '../types';
 import { fmtDate } from '../utils/dateUtils';
 
+import DateInput from '../components/DateInput';
 const RATE_TYPE_LABEL: Record<string, string> = {
   monthly: 'Monthly Charges',
   mbl: 'Per MBL',
@@ -231,11 +232,11 @@ const AirInvoicePage: React.FC = () => {
             </div>
             <div className="form-group">
               <label className="form-label">From Date <span className="required">*</span></label>
-              <input className="form-control" type="date" value={fromDate} onChange={e => { setFromDate(e.target.value); resetAll(); }} />
+              <DateInput className="form-control" value={fromDate} onChange={e => { setFromDate(e.target.value); resetAll(); }} />
             </div>
             <div className="form-group">
               <label className="form-label">To Date <span className="required">*</span></label>
-              <input className="form-control" type="date" value={toDate} onChange={e => { setToDate(e.target.value); resetAll(); }} />
+              <DateInput className="form-control" value={toDate} onChange={e => { setToDate(e.target.value); resetAll(); }} />
             </div>
           </div>
           <button className="btn btn-primary" onClick={handlePreview} disabled={loadingPreview}>
@@ -255,7 +256,7 @@ const AirInvoicePage: React.FC = () => {
               </div>
               <div className="form-group">
                 <label className="form-label">Invoice Date</label>
-                <input className="form-control" type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} disabled={!!saved} />
+                <DateInput className="form-control" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} disabled={!!saved} />
               </div>
             </div>
             <table style={{ width: '100%', marginBottom: 12 }}>

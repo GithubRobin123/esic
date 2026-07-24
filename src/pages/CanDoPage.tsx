@@ -4,6 +4,7 @@ import { CanDo } from '../types';
 import toast from 'react-hot-toast';
 import { fmtDate } from '../utils/dateUtils';
 
+import DateInput from '../components/DateInput';
 const emptyForm = {
   type: 'CAN' as 'CAN' | 'DO',
   reference_no: '',
@@ -222,11 +223,11 @@ const CanDoPage: React.FC = () => {
                 <div className="form-row form-row-2">
                   <div className="form-group">
                     <label className="form-label">Issue Date</label>
-                    <input className="form-control" type="date" value={form.issue_date} onChange={e => f('issue_date', e.target.value)} />
+                    <DateInput className="form-control" value={form.issue_date} onChange={e => f('issue_date', e.target.value)} />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Valid Till</label>
-                    <input className="form-control" type="date" value={form.valid_till} onChange={e => f('valid_till', e.target.value)} />
+                    <DateInput className="form-control" value={form.valid_till} onChange={e => f('valid_till', e.target.value)} />
                   </div>
                 </div>
                 <div className="form-group">
