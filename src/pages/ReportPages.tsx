@@ -312,7 +312,7 @@ export const ConsolStatementPage: React.FC = () => {
   const [rows, setRows] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  const [pageSize, setPageSize] = useState(100);
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -486,6 +486,7 @@ export const ConsolStatementPage: React.FC = () => {
           pageSize={pageSize}
           onPage={p => setPage(p)}
           onPageSize={ps => { setPageSize(ps); setPage(1); }}
+          pageSizeOptions={[100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]}
         />
       </div>
     </div>
