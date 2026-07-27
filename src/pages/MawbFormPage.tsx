@@ -183,7 +183,7 @@ const MawbFormPage: React.FC = () => {
     setExistingHawbs(prev => prev.map((row, i) => i === index ? { ...row, [field]: value } : row));
   };
 
-  // Edit mode only: append a brand-new (unsaved) HAWB row — id stays '' until it's created on save
+  // Edit/Amend mode: append a brand-new (unsaved) HAWB row — id stays '' until it's created on save
   const addExistingHawbRow = () => {
     setExistingHawbs(prev => [...prev, {
       id: '', hawb_no: '', hawb_date: '',
@@ -255,9 +255,9 @@ const MawbFormPage: React.FC = () => {
         }
       }
     }
-    // Edit mode: newly added HAWB rows (no id yet) need a HAWB No before they can be created
+    // Edit/Amend mode: newly added HAWB rows (no id yet) need a HAWB No before they can be created
     const newHawbRows = existingHawbs.filter(h => !h.id && Boolean(h.hawb_no || h.total_packages || h.gross_weight));
-    if (mode === 'edit') {
+    if (mode === 'edit' || mode === 'amend') {
       for (let i = 0; i < newHawbRows.length; i++) {
         if (!newHawbRows[i].hawb_no) {
           toast.error(`New HAWB row: HAWB No is required`);
@@ -317,7 +317,8 @@ const MawbFormPage: React.FC = () => {
       } else if (mode === 'amend' && id) {
         const res = await api.post(`/mawbs/amend/${id}`, form);
         const newMawbId = res.data.id;
-        for (const h of existingHawbs) {
+        const carriedRows = existingHawbs.filter(h => h.id);
+        for (const h of carriedRows) {
           await api.post(`/hawbs/amend/${h.id}`, {
             mawb_id: newMawbId,
             hawb_date: h.hawb_date,
@@ -328,7 +329,20 @@ const MawbFormPage: React.FC = () => {
             item_description: h.item_description,
           });
         }
-        const hawbMsg = existingHawbs.length > 0 ? ` with ${existingHawbs.length} HAWB${existingHawbs.length === 1 ? '' : 's'}` : '';
+        for (const h of newHawbRows) {
+          await api.post('/hawbs', {
+            mawb_id: newMawbId,
+            hawb_no: h.hawb_no,
+            hawb_date: h.hawb_date,
+            origin: h.origin || form.origin,
+            destination: h.destination || form.destination,
+            total_packages: h.total_packages,
+            gross_weight: h.gross_weight,
+            item_description: h.item_description,
+          });
+        }
+        const totalCount = carriedRows.length + newHawbRows.length;
+        const hawbMsg = totalCount > 0 ? ` with ${totalCount} HAWB${totalCount === 1 ? '' : 's'}` : '';
         toast.success(`Amended MAWB created: ${res.data.mawb_no}${hawbMsg}`);
       }
       return true;
@@ -603,7 +617,7 @@ const MawbFormPage: React.FC = () => {
         </div>
       )}
 
-      {/* HAWB List — edit mode: full HAWB details editable (incl. HAWB No). Amend mode: existing HAWBs carried over, editable (HAWB No fixed, no new rows) */}
+      {/* HAWB List — edit mode: full HAWB details editable (incl. HAWB No). Amend mode: existing HAWBs carried over (HAWB No fixed), new HAWBs can also be added */}
       {(mode === 'edit' || mode === 'amend') && (
         <div className="card" style={{ maxWidth: 960, marginBottom: 24 }}>
           <div style={{ padding: '14px 24px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
@@ -612,12 +626,10 @@ const MawbFormPage: React.FC = () => {
               <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
                 {mode === 'edit'
                   ? 'Edit the HAWB details for this MAWB, or add new HAWBs below. Changes are saved together with the MAWB when you click Save.'
-                  : 'These HAWBs will be carried into the amendment. You can edit details, but HAWB numbers cannot be changed. New HAWBs cannot be added in Amend.'}
+                  : 'These HAWBs will be carried into the amendment. You can edit details, but existing HAWB numbers cannot be changed. New HAWBs can be added below.'}
               </p>
             </div>
-            {mode === 'edit' && (
-              <button className="btn btn-primary btn-sm" style={{ whiteSpace: 'nowrap' }} onClick={addExistingHawbRow}>+ Add HAWB</button>
-            )}
+            <button className="btn btn-primary btn-sm" style={{ whiteSpace: 'nowrap' }} onClick={addExistingHawbRow}>+ Add HAWB</button>
           </div>
 
           <div className="table-wrapper" style={{ margin: 0 }}>
@@ -638,7 +650,7 @@ const MawbFormPage: React.FC = () => {
                       <th style={{ width: 140 }}>PACKAGES</th>
                       <th style={{ width: 140 }}>WEIGHT</th>
                       <th>DESCRIPTION</th>
-                      {mode === 'edit' && <th style={{ width: 80 }}>ACTION</th>}
+                      {(mode === 'edit' || mode === 'amend') && <th style={{ width: 80 }}>ACTION</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -650,8 +662,8 @@ const MawbFormPage: React.FC = () => {
                             className="form-control font-mono"
                             value={row.hawb_no}
                             onChange={e => updateExistingHawbRow(index, 'hawb_no', e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase())}
-                            disabled={mode === 'amend'}
-                            style={mode === 'amend' ? { background: '#f1f5f9' } : {}}
+                            disabled={mode === 'amend' && Boolean(row.id)}
+                            style={mode === 'amend' && row.id ? { background: '#f1f5f9' } : {}}
                           />
                         </td>
                         <td>
@@ -705,7 +717,7 @@ const MawbFormPage: React.FC = () => {
                             maxLength={30}
                           />
                         </td>
-                        {mode === 'edit' && (
+                        {(mode === 'edit' || mode === 'amend') && (
                           <td>
                             {!row.id && (
                               <button

@@ -84,8 +84,8 @@ const HawbPage: React.FC<HawbPageProps> = ({ initialMode }) => {
     }));
   };
 
-  // Only draft, non-Amend MAWBs can receive brand new HAWBs (Amend files may only amend existing HAWBs)
-  const draftMawbs = mawbs.filter(m => m.status === 'draft' && m.message_type !== 'A');
+  // Draft MAWBs (including Amend files) can receive brand new HAWBs
+  const draftMawbs = mawbs.filter(m => m.status === 'draft');
 
   const openAdd = () => {
     // If a specific MAWB is selected and it's transmitted, block add
@@ -93,10 +93,6 @@ const HawbPage: React.FC<HawbPageProps> = ({ initialMode }) => {
       const selected = mawbs.find(m => m.id === selectedMawbId);
       if (selected && selected.status !== 'draft') {
         toast.error('Cannot add HAWBs to a transmitted MAWB. Use Amend or Part instead.');
-        return;
-      }
-      if (selected && selected.message_type === 'A') {
-        toast.error('Cannot add new HAWBs to an Amend file. Use Amend on an existing HAWB instead.');
         return;
       }
     }
@@ -287,8 +283,6 @@ const HawbPage: React.FC<HawbPageProps> = ({ initialMode }) => {
             title={
               selectedMawbId && mawbs.find(m => m.id === selectedMawbId)?.status !== 'draft'
                 ? 'MAWB is transmitted — use Amend or Part'
-                : selectedMawbId && mawbs.find(m => m.id === selectedMawbId)?.message_type === 'A'
-                ? 'Amend file — use Amend on an existing HAWB instead'
                 : ''
             }
           >+ Add House AWB</button>
