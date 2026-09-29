@@ -128,6 +128,7 @@ const InvoiceDocument: React.FC<{ inv: AirInvoiceCalc; invoiceNo: string }> = ({
           <div><strong>A/C:</strong> {inv.bank.accountNo}</div>
           <div><strong>IFSC:</strong> {inv.bank.ifsc}</div>
           <div><strong>Branch:</strong> {inv.bank.branch}</div>
+          {inv.bank.accountType && <div><strong>Account Type:</strong> {inv.bank.accountType}</div>}
         </div>
         <div style={{ ...cellB, flex: 1 }}>
           <div style={{ fontWeight: 700, marginBottom: 4 }}>Declaration</div>

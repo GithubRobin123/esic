@@ -398,6 +398,7 @@ export interface AirInvoiceBank {
   accountNo: string;
   ifsc: string;
   branch: string;
+  accountType?: string;
 }
 
 export interface AirInvoiceCalc {

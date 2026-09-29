@@ -16,10 +16,11 @@ export const SUPPLIER = {
 };
 
 export const BANK = {
-  accountName: 'EDI MANIFEST SOLUTIONS',
+  accountName: 'EDI Manifest Solutions',
   accountNo: '50200083752941',
-  ifsc: 'HDFC0000459',
-  branch: 'PALWAL - HARYANA',
+  ifsc: 'HDFC0007122',
+  branch: 'SIKRI',
+  accountType: 'Current Account',
 };
 
 export const DEFAULT_SAC_CODE = '998439';

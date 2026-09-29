@@ -238,10 +238,11 @@ const TaxInvoicePreview: React.FC<Props> = ({
       }}>
         <div style={{ fontSize: 12 }}>
           <div style={{ fontWeight: 700 }}>Bank Details</div>
-          <div>Account Name: {BANK.accountName}</div>
+          <div>Account Holder: {BANK.accountName}</div>
           <div>Account No: {BANK.accountNo}</div>
           <div>IFSC: {BANK.ifsc}</div>
           <div>Branch: {BANK.branch}</div>
+          <div>Account Type: {BANK.accountType}</div>
         </div>
         <div style={{ fontSize: 12, textAlign: 'right', minWidth: 180 }}>
           <div>For {SUPPLIER.name}</div>
