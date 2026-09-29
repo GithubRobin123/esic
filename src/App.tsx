@@ -25,6 +25,13 @@ import {
 import { NotFoundPage } from './pages/Placeholders';
 import { ErrorcodePage } from './pages/ErrorcodePage';
 
+// Tax Invoice — standalone manual-entry GST invoicing module (admin only)
+import TaxInvoiceListPage from './pages/TaxInvoice/TaxInvoiceListPage';
+import TaxInvoiceFormPage from './pages/TaxInvoice/TaxInvoiceFormPage';
+import TaxInvoiceDetailPage from './pages/TaxInvoice/TaxInvoiceDetailPage';
+import TaxInvoicePartiesPage from './pages/TaxInvoice/TaxInvoicePartiesPage';
+import TaxInvoiceDashboardPage from './pages/TaxInvoice/TaxInvoiceDashboardPage';
+
 const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <>
     <Navbar />
@@ -95,6 +102,15 @@ const AppRoutes: React.FC = () => {
 
         {/* Accounting – admin only */}
         <Route path="/accounting/*" element={<ProtectedRoute roles={['master_admin', 'admin']}><AccountingPage /></ProtectedRoute>} />
+
+        {/* Tax Invoice – standalone manual GST invoicing, admin only.
+            Static segments are listed before /:id so they always win. */}
+        <Route path="/tax-invoice" element={<ProtectedRoute roles={['master_admin', 'admin']}><TaxInvoiceListPage /></ProtectedRoute>} />
+        <Route path="/tax-invoice/new" element={<ProtectedRoute roles={['master_admin', 'admin']}><TaxInvoiceFormPage /></ProtectedRoute>} />
+        <Route path="/tax-invoice/parties" element={<ProtectedRoute roles={['master_admin', 'admin']}><TaxInvoicePartiesPage /></ProtectedRoute>} />
+        <Route path="/tax-invoice/dashboard" element={<ProtectedRoute roles={['master_admin', 'admin']}><TaxInvoiceDashboardPage /></ProtectedRoute>} />
+        <Route path="/tax-invoice/:id" element={<ProtectedRoute roles={['master_admin', 'admin']}><TaxInvoiceDetailPage /></ProtectedRoute>} />
+        <Route path="/tax-invoice/:id/edit" element={<ProtectedRoute roles={['master_admin', 'admin']}><TaxInvoiceFormPage /></ProtectedRoute>} />
 
         {/* Admin */}
         <Route path="/admin/register-user" element={<ProtectedRoute roles={['master_admin', 'admin']}><RegisterUserPage /></ProtectedRoute>} />

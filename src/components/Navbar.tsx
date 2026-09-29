@@ -44,6 +44,18 @@ const NAV_ITEMS: NavItem[] = [
     ],
   },
   {
+    // Standalone manual GST invoicing — separate from the auto-generated
+    // Accounting invoices below.
+    label: 'Tax Invoice',
+    adminOnly: true,
+    items: [
+      { label: 'All Invoices', path: '/tax-invoice' },
+      { label: 'New Invoice', path: '/tax-invoice/new' },
+      { label: 'Parties', path: '/tax-invoice/parties' },
+      { label: 'Payment Dashboard', path: '/tax-invoice/dashboard' },
+    ],
+  },
+  {
     label: 'Accounting',
     adminOnly: true,   // hidden from regular 'user' role
     items: [
